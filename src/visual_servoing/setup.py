@@ -1,6 +1,7 @@
 from setuptools import find_packages, setup
+from glob import glob
 
-package_name = 'perception'
+package_name = 'visual_servoing'
 
 setup(
     name=package_name,
@@ -9,21 +10,24 @@ setup(
     data_files=[
         ('share/ament_index/resource_index/packages',
             ['resource/' + package_name]),
-        ('share/' + package_name, ['package.xml']),
+        (f'share/' + package_name, ['package.xml']),
+        (f'share/' + package_name + '/launch', glob('launch/*.launch.py'))
     ],
     install_requires=['setuptools'],
     zip_safe=True,
-    maintainer='ee106a-tah',
-    maintainer_email='danielmunicio360@gmail.com',
+    maintainer='ee106b-lab',
+    maintainer_email='ee106b-lab@todo.todo',
     description='TODO: Package description',
     license='TODO: License declaration',
-    tests_require=['pytest'],
+    extras_require={
+        'test': [
+            'pytest',
+        ],
+    },
     entry_points={
         'console_scripts': [
-            'process_pointcloud = perception.process_pointcloud:main',
-            'interactive_plane = perception.interactive_plane:main',
             'main = visual_servoing.main:main',
-            'tf = visual_servoing.static_tf_transform:main'
+            'tf = visual_servoing.static_tf_transform:main',
         ],
     },
 )

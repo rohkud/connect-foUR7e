@@ -13,7 +13,7 @@ from tf2_ros import Buffer, TransformListener
 from scipy.spatial.transform import Rotation as R
 import numpy as np
 
-from planning.ik import IKPlanner
+from planning.planning.ik import IKPlanner
 
 class UR7e_CubeGrasp(Node):
     def __init__(self):
