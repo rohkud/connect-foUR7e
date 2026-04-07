@@ -10,6 +10,18 @@ from rclpy.time import Time
 from tf2_sensor_msgs.tf2_sensor_msgs import do_transform_cloud
 from rcl_interfaces.msg import SetParametersResult
 
+import struct
+
+def rgb_float_to_tuple(rgb_float):
+    rgb_int = struct.unpack('I', struct.pack('f', rgb_float))[0]
+    r = (rgb_int >> 16) & 0xFF
+    g = (rgb_int >> 8) & 0xFF
+    b = rgb_int & 0xFF
+    return r, g, b
+
+def is_yellow(r, g, b):
+    return r > 200 and g < 80 and b < 80
+
 class RealSensePCSubscriber(Node):
     def __init__(self):
         super().__init__('realsense_pc_subscriber')
@@ -56,37 +68,46 @@ class RealSensePCSubscriber(Node):
 
         raw_points = pc2.read_points(
             transformed_cloud,
-            field_names=('x', 'y', 'z'),
+            field_names=('x', 'y', 'z', 'rgb'),
             skip_nans=True,
         )
-        tf
+        # print("Raw points [rgb]:", raw_points["rgb"])
+        colors = [rgb_float_to_tuple(rgb) for rgb in raw_points["rgb"]]
+
         points_base = np.column_stack(
-                (raw_points['x'], raw_points['y'], raw_points['z'])
-            ).astype(np.float32, copy=False)
+            (raw_points['x'], raw_points['y'], raw_points['z'], raw_points['rgb'])
+        ).astype(np.float32, copy=False)
 
-        # TODO: Create masks based on the specified min, max y and z parameters above in order to filter points
-        filtered_points = points_base[
-            (points_base[:, 2] >= self.min_z) &
-            (points_base[:, 2] <= self.max_z) &
-            (points_base[:, 1] <= self.max_y)
-        ]
+        yellow_mask = np.array([is_yellow(r, g, b) for r, g, b in colors])
+        yellow_points = points_base[yellow_mask]
 
-        if filtered_points.size == 0:
-            self.get_logger().warn(
-                f'No points after filters: z in [{self.min_z:.3f}, {self.max_z:.3f}] m, y <= {self.max_y:.3f} m'
-            )
-            return
+        # points_base = np.column_stack(
+        #         (raw_points['x'], raw_points['y'], raw_points['z'])
+        #     ).astype(np.float32, copy=False)
 
-        filtered_cloud = pc2.create_cloud_xyz32(
-            transformed_cloud.header,
-            filtered_points.tolist(),
-        )
-        self.filtered_points_pub.publish(filtered_cloud)
+        # # TODO: Create masks based on the specified min, max y and z parameters above in order to filter points
+        # filtered_points = points_base[
+        #     (points_base[:, 2] >= self.min_z) &
+        #     (points_base[:, 2] <= self.max_z) &
+        #     (points_base[:, 1] <= self.max_y)
+        # ]
+
+        # if filtered_points.size == 0:
+        #     self.get_logger().warn(
+        #         f'No points after filters: z in [{self.min_z:.3f}, {self.max_z:.3f}] m, y <= {self.max_y:.3f} m'
+        #     )
+        #     return
+
+        # filtered_cloud = pc2.create_cloud_xyz32(
+        #     transformed_cloud.header,
+        #     yellow_points.tolist(),
+        # )
+        # self.filtered_points_pub.publish(filtered_cloud)
 
         # TODO: Compute cube position in base_link frame using filtered_points.
-        cube_x = np.mean(filtered_points[:, 0])
-        cube_y = np.mean(filtered_points[:, 1])
-        cube_z = np.mean(filtered_points[:, 2])
+        cube_x = np.mean(yellow_points[:, 0])
+        cube_y = np.mean(yellow_points[:, 1])
+        cube_z = np.mean(yellow_points[:, 2])
 
         # TODO: Publish the cube pose message with the cube position information
         cube_pose = PointStamped()
@@ -98,9 +119,44 @@ class RealSensePCSubscriber(Node):
 
         self.cube_pose_pub.publish(cube_pose)
 
+    def cluster_points(self, points, cluster_distance=0.02):
+        """Simple distance-based clustering to separate individual discs"""
+        if len(points) == 0:
+            return []
+
+        clusters = []
+        visited = set()
+
+        for i, point in enumerate(points):
+            if i in visited:
+                continue
+
+            # Start new cluster
+            cluster = [point]
+            visited.add(i)
+            queue = [i]
+
+            # Grow cluster by finding nearby points
+            while queue:
+                current_idx = queue.pop(0)
+                current_point = points[current_idx]
+
+                for j, other_point in enumerate(points):
+                    if j in visited:
+                        continue
+
+                    # Check Euclidean distance
+                    distance = np.linalg.norm(current_point - other_point)
+                    if distance <= cluster_distance:
+                        cluster.append(other_point)
+                        visited.add(j)
+                        queue.append(j)
+
+            clusters.append(cluster)
+
+        return clusters
+
     def _on_parameter_update(self, params):
-        new_min_z = self.min_z
-        new_max_z = self.max_z
 
         for param in params:
             if param.name == 'min_z' and param.type_ == Parameter.Type.DOUBLE:

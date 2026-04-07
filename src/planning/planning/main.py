@@ -63,7 +63,7 @@ class UR7e_CubeGrasp(Node):
         z offset: +0.185 (to be above the cube by accounting for gripper length)
         '''
         pre_grasp_job = self.ik_planner.compute_ik(self.joint_state,
-                                            self.cube_pose.point.x - 0.01,
+                                            self.cube_pose.point.x,
                                             self.cube_pose.point.y,
                                             self.cube_pose.point.z + 0.185)
         self.job_queue.append(pre_grasp_job)
@@ -74,9 +74,9 @@ class UR7e_CubeGrasp(Node):
         DO NOT CHANGE z offset lower than +0.14. 
         '''
         grasp_job = self.ik_planner.compute_ik(self.joint_state,
-                                            self.cube_pose.point.x - 0.01,
+                                            self.cube_pose.point.x,
                                             self.cube_pose.point.y,
-                                            self.cube_pose.point.z + 0.14)
+                                            self.cube_pose.point.z + 0.16)
         self.job_queue.append(grasp_job)
 
         # 3) Close the gripper. See job_queue entries defined in init above for how to add this action.
