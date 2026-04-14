@@ -19,6 +19,11 @@ source install/setup.bash
 ros2 launch visual_servoing lab7.launch.py
 ```
 
+Launch usb cam
+```
+ros2 launch usb_cam camera.launch.py
+```
+
 Launch disc detection
 ```
 ros2 run disc_detector disc_node --ros-args -p color:=yellow
