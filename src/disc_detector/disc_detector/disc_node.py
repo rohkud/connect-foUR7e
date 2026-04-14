@@ -1,7 +1,7 @@
 import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import Image
-from geometry_msgs.msg import PointStamped
+from geometry_msgs.msg import PolygonStamped, Point32
 from cv_bridge import CvBridge
 import cv2
 import numpy as np
@@ -16,7 +16,7 @@ class DiscDetector(Node):
             self.image_callback,
             10
         )
-        self.pose_pub = self.create_publisher(PointStamped, '/disc_pose', 10)
+        self.points_pub = self.create_publisher(PolygonStamped, '/disc_points', 10)
         self.image_pub = self.create_publisher(Image, '/disc_image', 10)
         self.mask_pub = self.create_publisher(Image, '/disc_mask', 10)
         self.declare_parameter('color', 'red')
@@ -71,43 +71,45 @@ class DiscDetector(Node):
         self.get_logger().info(f"Found {len(contours)} contours")
 
         if contours:
-            # Find the most circular contour
-            best_contour = None
-            best_circularity = 0
+            points_published = 0
+            candidate_points = []
+            cv2.drawContours(cv_image, contours, -1, (0, 255, 0), 2)
+
             for contour in contours:
                 area = cv2.contourArea(contour)
-                if area > 500:
-                    perimeter = cv2.arcLength(contour, True)
-                    circularity = 4 * np.pi * area / (perimeter * perimeter) if perimeter > 0 else 0
-                    if circularity > 0.7 and circularity > best_circularity:
-                        best_contour = contour
-                        best_circularity = circularity
+                if area <= 500:
+                    continue
 
-            if best_contour is not None:
-                # Draw contours on the image
-                cv2.drawContours(cv_image, contours, -1, (0, 255, 0), 2)
+                perimeter = cv2.arcLength(contour, True)
+                circularity = 4 * np.pi * area / (perimeter * perimeter) if perimeter > 0 else 0
+                if circularity <= 0.5:
+                    continue
 
-                # Compute center
-                M = cv2.moments(best_contour)
-                if M['m00'] != 0:
-                    cx = int(M['m10'] / M['m00'])
-                    cy = int(M['m01'] / M['m00'])
+                M = cv2.moments(contour)
+                if M['m00'] == 0:
+                    continue
 
-                    # Draw center
-                    cv2.circle(cv_image, (cx, cy), 10, (255, 0, 0), -1)
+                cx = int(M['m10'] / M['m00'])
+                cy = int(M['m01'] / M['m00'])
 
-                    # Publish pose
-                    pose_msg = PointStamped()
-                    pose_msg.header = msg.header
-                    pose_msg.point.x = float(cx)
-                    pose_msg.point.y = float(cy)
-                    pose_msg.point.z = 0.0  # Assuming 2D
-                    self.pose_pub.publish(pose_msg)
-                    self.get_logger().info(f"Disc detected at ({cx}, {cy}) with circularity {best_circularity:.2f}")
+                cv2.circle(cv_image, (cx, cy), 6, (255, 0, 0), -1)
+                point = Point32(x=float(cx), y=float(cy), z=0.0)
+                candidate_points.append(point)
+                points_published += 1
 
-                # Publish the annotated image
+                self.get_logger().info(
+                    f"Disc candidate at ({cx}, {cy}) with circularity {circularity:.2f}")
+
+            if points_published > 0:
+                polygon_msg = PolygonStamped()
+                polygon_msg.header = msg.header
+                polygon_msg.polygon.points = candidate_points
+                self.points_pub.publish(polygon_msg)
+
                 img_msg = self.bridge.cv2_to_imgmsg(cv_image, encoding='bgr8')
                 self.image_pub.publish(img_msg)
+            else:
+                self.get_logger().info("No circular disc candidates above threshold were published")
 
 def main(args=None):
     rclpy.init(args=args)

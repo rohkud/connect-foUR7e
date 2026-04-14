@@ -1,6 +1,7 @@
 import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import Image
+from geometry_msgs.msg import PolygonStamped, Point32
 from cv_bridge import CvBridge
 import cv2
 import numpy as np
@@ -17,6 +18,7 @@ class BoardDetector(Node):
         )
         self.board_pub = self.create_publisher(Image, '/board_image', 10)
         self.debug_pub = self.create_publisher(Image, '/board_debug_image', 10)
+        self.points_pub = self.create_publisher(PolygonStamped, '/board_points', 10)
         self.get_logger().info("Board detector node started")
 
     def image_callback(self, msg):
@@ -66,12 +68,30 @@ class BoardDetector(Node):
             if best_contour is not None:
                 # Get bounding box
                 x, y, w, h = cv2.boundingRect(best_contour)
-                # Crop the image
-                cropped = cv_image[y:y+h, x:x+w]
+
+                # Trim the lower portion of the bounding box to crop out the legs
+                leg_trim = int(h * 0.25)
+                cropped_height = max(1, h - leg_trim)
+                cropped = cv_image[y:y+cropped_height, x:x+w]
+
                 # Publish cropped image
                 board_msg = self.bridge.cv2_to_imgmsg(cropped, encoding='bgr8')
                 self.board_pub.publish(board_msg)
-                self.get_logger().info(f"Board detected and cropped: {w}x{h}")
+
+                # Publish corner points for the cropped region
+                polygon_msg = PolygonStamped()
+                polygon_msg.header.stamp = self.get_clock().now().to_msg()
+                polygon_msg.header.frame_id = msg.header.frame_id if msg.header.frame_id else 'camera1'
+                polygon_msg.polygon.points = [
+                    Point32(x=float(x), y=float(y), z=0.0),
+                    Point32(x=float(x + w), y=float(y), z=0.0),
+                    Point32(x=float(x + w), y=float(y + cropped_height), z=0.0),
+                    Point32(x=float(x), y=float(y + cropped_height), z=0.0)
+                ]
+                self.points_pub.publish(polygon_msg)
+
+                self.get_logger().info(
+                    f"Board detected and cropped: {w}x{cropped_height} (trimmed {leg_trim}px for legs)")
 
 def main(args=None):
     rclpy.init(args=args)
