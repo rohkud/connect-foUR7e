@@ -2,6 +2,7 @@ import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import Image
 from cv_bridge import CvBridge
+from game_msgs.msg import GameBoard
 import cv2
 import numpy as np
 
@@ -17,6 +18,7 @@ class BoardDetector(Node):
         )
         self.board_pub = self.create_publisher(Image, '/board_image', 10)
         self.debug_pub = self.create_publisher(Image, '/board_debug_image', 10)
+        self.board_data_pub = self.create_publisher(GameBoard, '/board_data', 10)
         self.get_logger().info("Board detector node started")
 
     def image_callback(self, msg):
@@ -71,6 +73,14 @@ class BoardDetector(Node):
                 # Publish cropped image
                 board_msg = self.bridge.cv2_to_imgmsg(cropped, encoding='bgr8')
                 self.board_pub.publish(board_msg)
+
+                board_state_msg = GameBoard()
+                board_state_msg.x = x
+                board_state_msg.y = y
+                board_state_msg.w = w
+                board_state_msg.h = h
+                self.board_data_pub.publish(board_state_msg)
+                
                 self.get_logger().info(f"Board detected and cropped: {w}x{h}")
 
 def main(args=None):
