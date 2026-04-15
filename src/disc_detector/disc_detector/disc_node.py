@@ -2,6 +2,7 @@ import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import Image
 from geometry_msgs.msg import PolygonStamped, Point32
+from game_msgs.msg import DiscLoc2d
 from cv_bridge import CvBridge
 import cv2
 import numpy as np
@@ -19,6 +20,7 @@ class DiscDetector(Node):
         self.points_pub = self.create_publisher(PolygonStamped, '/disc_points', 10)
         self.image_pub = self.create_publisher(Image, '/disc_image', 10)
         self.mask_pub = self.create_publisher(Image, '/disc_mask', 10)
+        self.disc_data_pub = self.create_publisher(DiscLoc2d, '/disc_data', 10)
         self.declare_parameter('color', 'red')
         self.get_logger().info("Disc detector node started")
 
@@ -101,10 +103,13 @@ class DiscDetector(Node):
                     f"Disc candidate at ({cx}, {cy}) with circularity {circularity:.2f}")
 
             if points_published > 0:
-                polygon_msg = PolygonStamped()
-                polygon_msg.header = msg.header
-                polygon_msg.polygon.points = candidate_points
-                self.points_pub.publish(polygon_msg)
+                disc_data_msg = DiscLoc2d()
+                x = [p.x for p in candidate_points]
+                y = [p.y for p in candidate_points]
+                disc_data_msg.x = x
+                disc_data_msg.y = y
+                disc_data_msg.color = [color] * len(candidate_points)
+                self.disc_data_pub.publish(disc_data_msg)
 
                 img_msg = self.bridge.cv2_to_imgmsg(cv_image, encoding='bgr8')
                 self.image_pub.publish(img_msg)
