@@ -3,6 +3,7 @@ from rclpy.node import Node
 from std_msgs.msg import Int8MultiArray, MultiArrayDimension
 from game_msgs.msg import GameBoard, DiscLoc2d
 import numpy as np
+import cv2
 
 
 class GameStateNode(Node):
@@ -11,6 +12,7 @@ class GameStateNode(Node):
 
         self.board = None
         self.disc_data = None
+        self.homography = None
 
         self.board_sub = self.create_subscription(
             GameBoard,
@@ -36,6 +38,16 @@ class GameStateNode(Node):
 
     def board_callback(self, msg):
         self.board = msg
+        # Compute homography from board corners to canonical 6x7 board
+        if len(msg.corner_x) == 4 and len(msg.corner_y) == 4:
+            src_points = np.array([[msg.corner_x[i], msg.corner_y[i]] for i in range(4)], dtype=np.float32)
+            # Assuming order: TL, TR, BR, BL
+            dst_points = np.array([[0, 0], [700, 0], [700, 600], [0, 600]], dtype=np.float32)
+            self.homography = cv2.getPerspectiveTransform(src_points, dst_points)
+            self.get_logger().info('Computed homography from board corners')
+        else:
+            self.homography = None
+            self.get_logger().warn('Invalid board corners, homography not computed')
         self.update_game_state()
 
     def disc_callback(self, msg):
@@ -43,35 +55,27 @@ class GameStateNode(Node):
         self.update_game_state()
 
     def update_game_state(self):
-        if self.board is None or self.disc_data is None:
-            self.get_logger().debug("Waiting for both board and disc data...")
+        if self.board is None or self.disc_data is None or self.homography is None:
+            self.get_logger().debug("Waiting for board, disc data, and homography...")
             return
 
         # 6 rows (height), 7 columns (width)
         board_array = [[0 for _ in range(7)] for _ in range(6)]
 
-        x0 = self.board.x
-        y0 = self.board.y
-        w = self.board.w
-        h = self.board.h
-
-        if w <= 0 or h <= 0:
-            self.get_logger().warn('Invalid board bounding box')
-            return
-
-        # Compute cell size
-        cell_w = w / 7.0
-        cell_h = h / 6.0
-
         for x, y, color in zip(self.disc_data.x, self.disc_data.y, self.disc_data.color):
+            # Apply homography to transform to canonical board coordinates
+            transformed = self.apply_homography(self.homography, x, y)
+            if transformed is None:
+                continue
+            tx, ty = transformed
 
-            # Ignore points outside board
-            if x < x0 or x > x0 + w or y < y0 or y > y0 + h:
+            # Check if within canonical board bounds
+            if tx < 0 or tx >= 700 or ty < 0 or ty >= 600:
                 continue
 
-            # Compute grid indices
-            col = int((x - x0) / cell_w)
-            row = int((y - y0) / cell_h)
+            # Compute grid indices (cell size 100)
+            col = int(tx / 100.0)
+            row = int(ty / 100.0)
 
             # Clamp indices
             col = max(0, min(6, col))
@@ -90,8 +94,10 @@ class GameStateNode(Node):
 
             # Debug mapping
             self.get_logger().debug(
-                f"(x,y)=({x:.1f},{y:.1f}) → (row,col)=({row},{col}) color={color}"
+                f"(x,y)=({x:.1f},{y:.1f}) → (tx,ty)=({tx:.1f},{ty:.1f}) → (row,col)=({row},{col}) color={color}"
             )
+
+        board_array = board_array[::-1]
 
         # Print board nicely
         print("\nCurrent board state:")
@@ -111,6 +117,13 @@ class GameStateNode(Node):
 
         self.board_pub.publish(msg)
         self.get_logger().info('Published game state board')
+
+    def apply_homography(self, H, x, y):
+        point = np.array([x, y, 1.0], dtype=np.float32)
+        warped = H.dot(point)
+        if warped[2] == 0:
+            return None
+        return float(warped[0] / warped[2]), float(warped[1] / warped[2])
 
 
 def main(args=None):

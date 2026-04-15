@@ -1,4 +1,2 @@
-float64 x
-float64 y
-float64 h
-float64 w
+float64[4] corner_x
+float64[4] corner_y
