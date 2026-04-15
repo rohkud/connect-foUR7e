@@ -33,7 +33,7 @@ ros2 launch usb_cam camera.launch.py
 
 Launch disc detection
 ```
-ros2 run disc_detector disc_node --ros-args -p color:=yellow
+ros2 run disc_detector disc_node
 ```
 
 Launch block detection

@@ -17,14 +17,34 @@ class DiscDetector(Node):
             self.image_callback,
             10
         )
-        self.points_pub = self.create_publisher(PolygonStamped, '/disc_points', 10)
-        self.image_pub = self.create_publisher(Image, '/disc_image', 10)
-        self.mask_pub = self.create_publisher(Image, '/disc_mask', 10)
-        self.disc_data_pub = self.create_publisher(DiscLoc2d, '/disc_data', 10)
-        self.declare_parameter('color', 'red')
+        self.red_points_pub = self.create_publisher(PolygonStamped, f'/disc_points_red', 10)
+        self.yellow_points_pub = self.create_publisher(PolygonStamped, f'/disc_points_yellow', 10)
+        self.red_image_pub = self.create_publisher(Image, f'/disc_image_red', 10)
+        self.yellow_image_pub = self.create_publisher(Image, f'/disc_image_yellow', 10)
+        self.red_mask_pub = self.create_publisher(Image, f'/disc_mask_red', 10)
+        self.yellow_mask_pub = self.create_publisher(Image, f'/disc_mask_yellow', 10)
+        self.disc_data_pub = self.create_publisher(DiscLoc2d, f'/disc_data', 10)
         self.get_logger().info("Disc detector node started")
 
     def image_callback(self, msg):
+        red_candidates = self.image_callback_color(msg, 'red')
+        yellow_candidates = self.image_callback_color(msg, 'yellow')
+
+        disc_data_msg = DiscLoc2d()
+        x_red = [p.x for p in red_candidates]
+        y_red = [p.y for p in red_candidates]
+
+        x_yellow = [p.x for p in yellow_candidates]
+        y_yellow = [p.y for p in yellow_candidates]
+
+        x = x_red + x_yellow
+        y = y_red + y_yellow
+        disc_data_msg.x = x
+        disc_data_msg.y = y
+        disc_data_msg.color = ['red'] * len(red_candidates) + ['yellow'] * len(yellow_candidates)
+        self.disc_data_pub.publish(disc_data_msg)
+
+    def image_callback_color(self, msg, color):
         self.get_logger().info("Image received")
         try:
             cv_image = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
@@ -36,7 +56,6 @@ class DiscDetector(Node):
         hsv = cv2.cvtColor(cv_image, cv2.COLOR_BGR2HSV)
 
         # Get color parameter
-        color = self.get_parameter('color').value
         if color == 'red':
             lower1 = np.array([0, 120, 120])
             upper1 = np.array([10, 255, 255])
@@ -66,7 +85,10 @@ class DiscDetector(Node):
 
         # Publish the mask
         mask_msg = self.bridge.cv2_to_imgmsg(mask, encoding='mono8')
-        self.mask_pub.publish(mask_msg)
+        if color == 'red':
+            self.red_mask_pub.publish(mask_msg)
+        else:
+            self.yellow_mask_pub.publish(mask_msg)
 
         # Find contours
         contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
@@ -103,18 +125,18 @@ class DiscDetector(Node):
                     f"Disc candidate at ({cx}, {cy}) with circularity {circularity:.2f}")
 
             if points_published > 0:
-                disc_data_msg = DiscLoc2d()
-                x = [p.x for p in candidate_points]
-                y = [p.y for p in candidate_points]
-                disc_data_msg.x = x
-                disc_data_msg.y = y
-                disc_data_msg.color = [color] * len(candidate_points)
-                self.disc_data_pub.publish(disc_data_msg)
 
                 img_msg = self.bridge.cv2_to_imgmsg(cv_image, encoding='bgr8')
-                self.image_pub.publish(img_msg)
+                if color == 'red':
+                    self.red_image_pub.publish(img_msg)
+                else:
+                    self.yellow_image_pub.publish(img_msg)
+
             else:
                 self.get_logger().info("No circular disc candidates above threshold were published")
+            
+            return candidate_points
+        return []
 
 def main(args=None):
     rclpy.init(args=args)
