@@ -21,6 +21,7 @@ setup(
     entry_points={
         'console_scripts': [
             'board_node = board_detector.board_node:main',
+            'color_picker = board_detector.color_picker:main',
         ],
     },
 )
