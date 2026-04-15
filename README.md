@@ -20,12 +20,6 @@ Turn on robot
 ros2 run ur7e_utils enable_comms
 ```
 
-Launch aruco tag detection
-```
-source install/setup.bash
-ros2 launch visual_servoing lab7.launch.py
-```
-
 Launch usb cam
 ```
 ros2 launch usb_cam camera.launch.py
@@ -36,16 +30,32 @@ Launch disc detection
 ros2 run disc_detector disc_node
 ```
 
-Launch block detection
+Pick corners
 ```
-source install/setup.bash
-ros2 launch planning lab5_bringup.launch.py
+ros2 run disc_detector color_picker
+```
+
+Run state detector
+```
+ros2 run game_state game_state_node
+```
+
+Publish the corners
+```
+ros2 run board_detector board_node
 ```
 
 Separate terminal
 ```
 source install/setup.bash
 ros2 run planning main
+```
+
+
+Launch aruco tag detection
+```
+source install/setup.bash
+ros2 launch visual_servoing lab7.launch.py
 ```
 
 ## Testing
