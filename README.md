@@ -2,11 +2,18 @@
 
 
 ```
-ros2 launch realsense2_camera rs_launch.py pointcloud.enable:=true
-\rgb_camera.color_profile:=1920x1080x30
+<!-- ros2 launch realsense2_camera rs_launch.py pointcloud.enable:=true
+\rgb_camera.color_profile:=1920x1080x30 -->
 ```
 
 ## Startup
+
+Get into distrobox (1st time EVER)
+```
+inst-containers-setup
+~ee106a/create-ros2-container
+distrobox enter ros2
+```
 
 Turn on robot
 ```
