@@ -29,6 +29,8 @@ from game_msgs.msg import GameBoard
 import json
 import os
 
+from ament_index_python.packages import get_package_share_directory
+
 
 def load_board_corners(config_file):
     """Load board corners from JSON file. Returns defaults if file doesn't exist."""
@@ -64,9 +66,11 @@ class BoardDetector(Node):
     def __init__(self):
         super().__init__('board_detector')
         
-        config_dir = os.path.dirname(__file__)
-        board_corners_file = os.path.join(config_dir, 'board_corners.json')
-        self.board_corners = load_board_corners(board_corners_file)
+        config_file = os.path.join(
+            get_package_share_directory('board_calibration'),
+            'board_corners.json'
+        )
+        self.board_corners = load_board_corners(config_file)
         
         self.board_data_pub = self.create_publisher(GameBoard, '/board_data', 10)
         

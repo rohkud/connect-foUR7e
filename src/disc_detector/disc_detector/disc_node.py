@@ -36,6 +36,8 @@ import numpy as np
 import json
 import os
 
+from ament_index_python.packages import get_package_share_directory
+
 
 def load_color_config(config_file):
     """Load color configuration from JSON file or return defaults."""
@@ -73,7 +75,10 @@ class DiscDetector(Node):
         self.bridge = CvBridge()
         
         # Load color configuration
-        config_file = os.path.join(os.path.dirname(__file__), 'color_config.json')
+        config_file = os.path.join(
+            get_package_share_directory('board_calibration'),
+            'color_config.json'
+        )
         self.color_config = load_color_config(config_file)
         self.get_logger().info(f"Loaded color config: {self.color_config}")
         

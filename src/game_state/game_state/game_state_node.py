@@ -62,6 +62,8 @@ class GameStateNode(Node):
     def board_callback(self, msg):
         self.board = msg
         # Compute homography from board corners to canonical 6x7 board
+        self.get_logger().info('Received board corners, computing homography...')
+        self.get_logger().info(f"Board corners: {list(zip(msg.corner_x, msg.corner_y))}")
         if len(msg.corner_x) == 4 and len(msg.corner_y) == 4:
             src_points = np.array([[msg.corner_x[i], msg.corner_y[i]] for i in range(4)], dtype=np.float32)
             # Assuming order: TL, TR, BR, BL
@@ -94,6 +96,7 @@ class GameStateNode(Node):
 
             # Check if within canonical board bounds
             if tx < 0 or tx >= 700 or ty < 0 or ty >= 600:
+                self.get_logger().warn(f"Transformed point out of bounds: (tx, ty)=({tx:.1f}, {ty:.1f})")
                 continue
 
             # Compute grid indices (cell size 100)
@@ -123,8 +126,7 @@ class GameStateNode(Node):
         board_array = board_array[::-1]
 
         # Print board nicely
-        print("\nCurrent board state:")
-        print(np.array(board_array))
+        self.get_logger().info(f"\nCurrent board state:\n{np.array(board_array)}")
 
         # Publish as Int8MultiArray
         msg = Int8MultiArray()

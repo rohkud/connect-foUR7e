@@ -47,6 +47,8 @@ import json
 import os
 from pathlib import Path
 
+from ament_index_python.packages import get_package_share_directory
+
 
 def load_config(config_file):
     """Load existing board corners config file or return defaults."""
@@ -121,7 +123,10 @@ def main():
     from sensor_msgs.msg import Image
     from cv_bridge import CvBridge
     
-    config_file = os.path.join(os.path.dirname(__file__), 'board_corners.json')
+    config_file = os.path.join(
+        get_package_share_directory('board_calibration'),
+        'board_corners.json'
+    )
     config = load_config(config_file)
     
     class ColorPickerNode(Node):

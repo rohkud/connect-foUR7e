@@ -122,7 +122,7 @@ class GameSolver(Node):
         win = self.check_win(board, player)
         board[row][col] = 0
         return win
-
+    # TODO: Make depth = 6
     def get_best_move(self, board, player, depth=2):
         valid_moves = [c for c in range(7) if board[0][c] == 0]
         opponent = 3 - player

@@ -10,6 +10,8 @@ import json
 import os
 from pathlib import Path
 
+from ament_index_python.packages import get_package_share_directory
+
 
 def bgr_to_hsv_range(bgr_color, h_tolerance=10, s_tolerance=50, v_tolerance=50):
     """Convert BGR color to HSV range with tolerance."""
@@ -99,7 +101,10 @@ def main():
     from sensor_msgs.msg import Image
     from cv_bridge import CvBridge
     
-    config_file = os.path.join(os.path.dirname(__file__), 'color_config.json')
+    config_file = os.path.join(
+        get_package_share_directory('board_calibration'),
+        'color_config.json'
+    )
     
     class ColorPickerNode(Node):
         def __init__(self):
