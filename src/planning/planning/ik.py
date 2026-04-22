@@ -1,3 +1,15 @@
+"""
+================================================================================
+Inverse Kinematics Planner (ik.py)
+================================================================================
+
+PURPOSE:
+    Provides interface to MoveIt's inverse kinematics and motion planning services.
+    Converts Cartesian space targets (x, y, z, orientation) to joint configurations
+    and plans collision-free trajectories for the UR7e robot manipulator.
+================================================================================
+"""
+
 import rclpy
 from rclpy.node import Node
 from moveit_msgs.srv import GetPositionIK, GetMotionPlan

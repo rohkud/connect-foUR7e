@@ -1,4 +1,22 @@
 """
+================================================================================
+ArUco Marker Detection Node (aruco_node.py)
+================================================================================
+
+PURPOSE:
+    Detects and localizes ArUco markers in camera images.
+    Computes 6-DOF pose of each marker and publishes for visual tracking,
+    calibration, or visual servoing applications.
+
+VISUALIZATION IN RVIZ:
+    1. Add PoseArray display for /aruco_poses
+    2. Add TF display to see marker frame transforms
+    3. Set Fixed Frame to camera frame
+    4. Detected markers show as poses with coordinate axes
+================================================================================
+"""
+
+"""
 This node locates Aruco AR markers in images and publishes their ids and poses.
 
 Subscriptions:

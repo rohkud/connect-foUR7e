@@ -1,4 +1,23 @@
 """
+================================================================================
+ArUco Marker Generator Script (aruco_generate_marker.py)
+================================================================================
+
+PURPOSE:
+    Command-line utility to generate ArUco marker images. Creates printable
+    PNG files of ArUco markers for use in calibration, visual servoing, or
+    spatial reference applications.
+
+
+OUTPUT:
+    - Filename: marker_{id:04d}.png (e.g., marker_0001.png)
+    - Format: 8-bit grayscale PNG
+    - Content: Black and white marker pattern
+    - Size: {--size} × {--size} pixels
+================================================================================
+"""
+
+"""
 Script for generating Aruco marker images.
 
 Author: Nathan Sprague

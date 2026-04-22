@@ -1,3 +1,21 @@
+"""
+================================================================================
+PointCloud Processor & Object Detection (process_pointcloud.py)
+================================================================================
+
+PURPOSE:
+    Processes 3D point cloud data from RealSense depth camera to detect and
+    localize yellow discs in 3D space. Transforms camera frame point cloud to
+    robot base frame and applies spatial/color filtering.
+
+VISUALIZATION IN RVIZ:
+    1. Add PointCloud2 display for /filtered_points
+    2. Add Marker display for /cube_pose
+    3. Set Fixed Frame to "base_link"
+    4. Verify yellow points and detected centroid visible
+================================================================================
+"""
+
 import rclpy
 from rclpy.node import Node
 from rclpy.parameter import Parameter

@@ -1,7 +1,44 @@
 #!/usr/bin/env python3
 """
-Board corner picker tool for board detector.
-Displays the camera feed and saves four selected board corners to the config file.
+================================================================================
+Board Corner Calibration Tool (board_corners.py)
+================================================================================
+
+PURPOSE:
+    Interactive tool for calibrating the physical Connect Four board's corner
+    positions. This is a critical preprocessing step for the vision pipeline.
+
+FUNCTIONALITY:
+    - Displays live camera feed from /camera1/image_raw
+    - Allows user to select 4 board corners via mouse clicks (left-click to select,
+      right-click to reset)
+    - Saves corner coordinates to board_corners.json for use by board_node
+    - Supports loading previously saved configurations
+
+KEY FEATURES:
+    - Interactive calibration: Click to select corners in order (TL, TR, BR, BL)
+    - Error handling for corrupted/missing config files
+    - JSON-based persistent storage
+
+DEPENDENCIES:
+    - cv2 (OpenCV): Image capture and display
+    - rclpy: ROS2 node infrastructure
+    - cv_bridge: Convert ROS Image messages to OpenCV format
+    - sensor_msgs: ROS Image message type
+
+OUTPUTS:
+    - board_corners.json: Contains array of 4 corner coordinates [x, y]
+
+USAGE:
+    ros2 run board_calibration board_corners
+    - Click on the camera feed to select 4 board corners
+    - Configuration is saved automatically upon selecting 4th corner
+    - Right-click to clear and start over
+
+INTEGRATION:
+    Output used by board_node.py to publish board corner positions
+    on /board_data topic for game_state_node processing
+================================================================================
 """
 
 import cv2
@@ -162,11 +199,3 @@ def main():
         rclpy.spin(node)
     except KeyboardInterrupt:
         pass
-    finally:
-        cv2.destroyAllWindows()
-        node.destroy_node()
-        rclpy.shutdown()
-
-
-if __name__ == '__main__':
-    main()

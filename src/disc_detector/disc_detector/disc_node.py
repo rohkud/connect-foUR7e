@@ -1,3 +1,30 @@
+"""
+================================================================================
+Disc Detection Node (disc_node.py)
+================================================================================
+
+PURPOSE:
+    Real-time detection of red and yellow Connect Four discs from camera feed.
+    Uses HSV color segmentation to identify disc positions in pixel coordinates.
+    This is the 1st stage of the perception pipeline.
+
+KEY PROCESSING STEPS:
+    1. Load color configuration from color_config.json
+    2. Convert BGR image to HSV color space
+    3. Apply HSV range masks for target colors
+    4. Combine masks (bitwise OR for red's dual ranges)
+    5. Apply Gaussian blur (5x5 kernel) for noise reduction
+    6. Find contours on masked image
+    7. Calculate centroid for each contour (disc position)
+
+OUTPUT DATA STRUCTURE (DiscLoc2d):
+    - x[]: Array of x-coordinates (pixels) for all detected discs
+    - y[]: Array of y-coordinates (pixels) for all detected discs
+    - color[]: Array of color labels ("red" or "yellow") matching x,y order
+
+================================================================================
+"""
+
 import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import Image
@@ -6,11 +33,50 @@ from game_msgs.msg import DiscLoc2d
 from cv_bridge import CvBridge
 import cv2
 import numpy as np
+import json
+import os
+
+
+def load_color_config(config_file):
+    """Load color configuration from JSON file or return defaults."""
+    default_config = {
+        'red': {
+            'lower_hsv': [0, 70, 70],
+            'upper_hsv': [10, 255, 255]
+        },
+        'yellow': {
+            'lower_hsv': [25, 50, 50],
+            'upper_hsv': [35, 255, 255]
+        }
+    }
+    
+    if os.path.exists(config_file):
+        try:
+            with open(config_file, 'r') as f:
+                config = json.load(f)
+            # Validate config has required fields
+            for color in ['red', 'yellow']:
+                if color not in config or 'lower_hsv' not in config[color] or 'upper_hsv' not in config[color]:
+                    self.get_logger().warn(f"Invalid color config for {color}, using defaults")
+                    config[color] = default_config[color]
+            return config
+        except Exception as e:
+            print(f"Error reading color config: {e}")
+            return default_config
+    
+    return default_config
+
 
 class DiscDetector(Node):
     def __init__(self):
         super().__init__('disc_detector')
         self.bridge = CvBridge()
+        
+        # Load color configuration
+        config_file = os.path.join(os.path.dirname(__file__), 'color_config.json')
+        self.color_config = load_color_config(config_file)
+        self.get_logger().info(f"Loaded color config: {self.color_config}")
+        
         self.image_sub = self.create_subscription(
             Image,
             '/camera1/image_raw',
@@ -55,30 +121,44 @@ class DiscDetector(Node):
         # Convert to HSV
         hsv = cv2.cvtColor(cv_image, cv2.COLOR_BGR2HSV)
 
-        # Get color parameter
-        if color == 'red':
-            lower1 = np.array([0, 120, 120])
-            upper1 = np.array([10, 255, 255])
-            lower2 = np.array([170, 120, 120])
-            upper2 = np.array([180, 255, 255])
-        elif color == 'yellow':
-            lower1 = np.array([25, 100, 100])
-            upper1 = np.array([35, 255, 255])
-            lower2 = None  # No second range
-            upper2 = None
+        # Get color from config
+        if color in self.color_config and 'lower_hsv' in self.color_config[color] and 'upper_hsv' in self.color_config[color]:
+            lower_hsv = self.color_config[color]['lower_hsv']
+            upper_hsv = self.color_config[color]['upper_hsv']
+            
+            # Handle red's dual range (wrap around hue 180)
+            if color == 'red' and lower_hsv[0] > upper_hsv[0]:
+                # Red wraps around, need two ranges
+                lower1 = np.array([0, lower_hsv[1], lower_hsv[2]])
+                upper1 = np.array([upper_hsv[0], upper_hsv[1], upper_hsv[2]])
+                lower2 = np.array([lower_hsv[0], lower_hsv[1], lower_hsv[2]])
+                upper2 = np.array([180, upper_hsv[1], upper_hsv[2]])
+                mask1 = cv2.inRange(hsv, lower1, upper1)
+                mask2 = cv2.inRange(hsv, lower2, upper2)
+                mask = cv2.bitwise_or(mask1, mask2)
+            else:
+                lower1 = np.array(lower_hsv)
+                upper1 = np.array(upper_hsv)
+                mask = cv2.inRange(hsv, lower1, upper1)
         else:
-            self.get_logger().warn(f"Color {color} not supported, using red")
-            lower1 = np.array([0, 120, 120])
-            upper1 = np.array([10, 255, 255])
-            lower2 = np.array([170, 120, 120])
-            upper2 = np.array([180, 255, 255])
-
-        if lower2 is not None:
-            mask1 = cv2.inRange(hsv, lower1, upper1)
-            mask2 = cv2.inRange(hsv, lower2, upper2)
-            mask = cv2.bitwise_or(mask1, mask2)
-        else:
-            mask = cv2.inRange(hsv, lower1, upper1)
+            # Fallback to defaults
+            self.get_logger().warn(f"Color config not found for {color}, using defaults")
+            if color == 'red':
+                lower1 = np.array([0, 120, 120])
+                upper1 = np.array([10, 255, 255])
+                lower2 = np.array([170, 120, 120])
+                upper2 = np.array([180, 255, 255])
+                mask1 = cv2.inRange(hsv, lower1, upper1)
+                mask2 = cv2.inRange(hsv, lower2, upper2)
+                mask = cv2.bitwise_or(mask1, mask2)
+            elif color == 'yellow':
+                lower1 = np.array([25, 100, 100])
+                upper1 = np.array([35, 255, 255])
+                mask = cv2.inRange(hsv, lower1, upper1)
+            else:
+                lower1 = np.array([0, 120, 120])
+                upper1 = np.array([10, 255, 255])
+                mask = cv2.inRange(hsv, lower1, upper1)
 
         # # Apply Gaussian blur to reduce noise
         mask = cv2.GaussianBlur(mask, (5, 5), 0)

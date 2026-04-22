@@ -1,6 +1,6 @@
 from setuptools import setup
 
-package_name = 'board_detector'
+package_name = 'board_calibration'
 
 setup(
     name=package_name,
@@ -15,12 +15,13 @@ setup(
     zip_safe=True,
     maintainer='ee106a',
     maintainer_email='ee106a@example.com',
-    description='Detect blue Connect 4 board and crop image to bounding box',
+    description='Board corner calibration tool for Connect Four',
     license='MIT',
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'board_node = board_detector.board_node:main',
+            'board_corners = board_calibration.board_corners:main',
+            'disc_colors = board_calibration.disc_colors:main',
         ],
     },
 )

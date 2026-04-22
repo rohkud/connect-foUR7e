@@ -1,3 +1,16 @@
+"""
+================================================================================
+Main Planning & Control Node (main.py)
+================================================================================
+
+PURPOSE:
+    Orchestrates robot manipulation for Connect Four disc placement. Converts
+    high-level game moves (column index) into physical robot actions via
+    inverse kinematics and motion planning. Implements a job queue for
+    sequential execution of grasp, move, and release actions.
+================================================================================
+"""
+
 # ROS Libraries
 from std_srvs.srv import Trigger
 import sys

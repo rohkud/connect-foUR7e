@@ -1,3 +1,15 @@
+"""
+================================================================================
+Static Transform Broadcaster (static_tf_transform.py)
+================================================================================
+
+PURPOSE:
+    Publishes static coordinate frame transformation from robot wrist to camera.
+    Enables coordinate conversions between the UR7e gripper frame and RealSense
+    camera frame, essential for connecting 3D perception to motion control.
+================================================================================
+"""
+
 #!/usr/bin/env python3
 import rclpy
 from rclpy.node import Node

@@ -1,3 +1,26 @@
+"""
+================================================================================
+Game Solver Node (game_solver_node.py)
+================================================================================
+
+PURPOSE:
+    Determines optimal Connect Four moves for the robot using minimax algorithm
+    with alpha-beta pruning. Serves as the AI decision engine for the robot.
+
+METHODS:
+    - get_row(board, col): Returns lowest empty row in column, None if full
+    - check_win(board, player): Detects if player has 4-in-a-row
+    - is_winning_move(board, col, player): Tests if move wins the game
+    - get_best_move(board, player, depth): Main minimax interface
+    - minimax(board, depth, maximizing): Recursive game tree search
+    - score_position(board): Heuristic evaluation function
+
+OUTPUTS:
+    - Log message: "Optimal move for {color}: column {move}"
+    - Best move determined at initialization (single evaluation per game)
+================================================================================
+"""
+
 import rclpy
 from rclpy.node import Node
 

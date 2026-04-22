@@ -1,3 +1,26 @@
+"""
+================================================================================
+Game State Aggregator Node (game_state_node.py)
+================================================================================
+
+PURPOSE:
+    Aggregates perception data from board_node and disc_detector to maintain
+    a 6x7 game board state matrix. Performs perspective transformation
+    from camera pixel coordinates to logical board grid indices.
+
+CORE ALGORITHM - Perspective Transform:
+    1. Receive 4 board corner pixel coordinates (top-left, top-right, bottom-right, bottom-left)
+    2. Define canonical board in 700x600 pixel space (100 pixels per cell)
+    3. Compute homography H via cv2.getPerspectiveTransform()
+    4. For each detected disc:
+       a. Apply homography: (tx, ty) = H * (px, py)
+       b. Map to grid: col = int(tx/100), row = int(ty/100)
+       c. Clamp indices to [0-6] and [0-5] respectively
+       d. Flip row (image coords → board coords): row = 5 - row
+       e. Write to board array: board[row][col] = color_code
+================================================================================
+"""
+
 import rclpy
 from rclpy.node import Node
 from std_msgs.msg import Int8MultiArray, MultiArrayDimension
