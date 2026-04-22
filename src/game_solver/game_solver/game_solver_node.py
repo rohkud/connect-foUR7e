@@ -7,6 +7,12 @@ PURPOSE:
     Determines optimal Connect Four moves for the robot using minimax algorithm
     with alpha-beta pruning. Serves as the AI decision engine for the robot.
 
+SUBSCRIPTIONS:
+    - /game_solver/board: Int8MultiArray containing 6x7 board state
+
+PUBLISHES:
+    - /game_solver/move: Int8 - The recommended column to play (0-6)
+
 METHODS:
     - get_row(board, col): Returns lowest empty row in column, None if full
     - check_win(board, player): Detects if player has 4-in-a-row
@@ -16,13 +22,15 @@ METHODS:
     - score_position(board): Heuristic evaluation function
 
 OUTPUTS:
-    - Log message: "Optimal move for {color}: column {move}"
-    - Best move determined at initialization (single evaluation per game)
+    - Publishes to /game_solver/move: "Optimal move for {color}: column {move}"
+
 ================================================================================
 """
 
 import rclpy
 from rclpy.node import Node
+from std_msgs.msg import Int8MultiArray, Int8
+
 
 class GameSolver(Node):
     def __init__(self):
@@ -30,17 +38,52 @@ class GameSolver(Node):
         self.declare_parameter('color', 'red')
         self.color = self.get_parameter('color').value
         self.player = 1 if self.color == 'red' else 2
-        # Hardcoded board: 0=empty, 1=red, 2=yellow
-        self.board = [
-            [0, 0, 0, 0, 0, 0, 0],  # top
-            [0, 0, 0, 0, 0, 0, 0],
-            [0, 0, 0, 0, 0, 0, 0],
-            [0, 0, 2, 1, 0, 0, 0],
-            [0, 1, 2, 1, 0, 0, 0],
-            [1, 2, 1, 2, 0, 0, 0],  # bottom
-        ]
+        
+        # Current board state (received from game_planner)
+        self.board = None
+        
+        # Subscribe to board from game_planner
+        self.board_sub = self.create_subscription(
+            Int8MultiArray,
+            '/game_solver/board',
+            self.board_callback,
+            5
+        )
+        
+        # Publish solution
+        self.solution_pub = self.create_publisher(
+            Int8,
+            '/game_solver/move',
+            5
+        )
+        
+        self.get_logger().info(f'Game solver node started for {self.color}')
+
+    def board_callback(self, msg):
+        """Receive board from game_planner and compute best move."""
+        # Convert flat array to 2D board
+        data = msg.data
+        if len(data) != 42:  # 6x7 = 42
+            self.get_logger().error(f'Invalid board size: {len(data)}, expected 42')
+            return
+        
+        # Reshape to 6x7 (row-major)
+        self.board = [data[i*7:(i+1)*7] for i in range(6)]
+        
+        self.get_logger().info('Received board, computing best move...')
+        
+        # Compute best move
         move = self.get_best_move(self.board, self.player)
-        self.get_logger().info(f"Optimal move for {self.color}: column {move}")
+        
+        if move is not None:
+            self.get_logger().info(f"Optimal move for {self.color}: column {move}")
+            
+            # Publish solution
+            move_msg = Int8()
+            move_msg.data = move
+            self.solution_pub.publish(move_msg)
+        else:
+            self.get_logger().warn('No valid move found (board may be full)')
 
     def get_row(self, board, col):
         for r in range(5, -1, -1):
@@ -80,7 +123,7 @@ class GameSolver(Node):
         board[row][col] = 0
         return win
 
-    def get_best_move(self, board, player, depth=5):
+    def get_best_move(self, board, player, depth=2):
         valid_moves = [c for c in range(7) if board[0][c] == 0]
         opponent = 3 - player
 
@@ -142,7 +185,7 @@ class GameSolver(Node):
 def main(args=None):
     rclpy.init(args=args)
     node = GameSolver()
-    rclpy.spin_once(node, timeout_sec=0)
+    rclpy.spin(node)
     node.destroy_node()
     rclpy.shutdown()
 

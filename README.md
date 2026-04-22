@@ -50,6 +50,16 @@ Publish the corners
 ros2 run board_detector board_node
 ```
 
+Run the solver
+```
+ros2 run game_solver game_solver_node
+```
+
+Run the planner
+```
+ros2 run game_planner game_planner_node
+```
+
 Separate terminal
 ```
 source install/setup.bash
