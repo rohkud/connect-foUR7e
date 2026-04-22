@@ -57,7 +57,7 @@ ros2 run game_solver game_solver_node
 
 Run the planner
 ```
-ros2 run game_planner game_planner_node
+ros2 launch game_planner game_planner.launch.py
 ```
 
 Separate terminal
