@@ -32,7 +32,7 @@ ros2 run disc_detector disc_node
 
 Pick corners
 ```
-ros2 run disc_detector color_picker
+ros2 run board_detector board_corners
 ```
 
 Run state detector
