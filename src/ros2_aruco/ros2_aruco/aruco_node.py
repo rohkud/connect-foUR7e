@@ -122,7 +122,7 @@ class ArucoNode(rclpy.node.Node):
 
         self.declare_parameter(
             name="image_topic",
-            value="/camera/image_raw",
+            value="/camera1/image_raw",
             descriptor=ParameterDescriptor(
                 type=ParameterType.PARAMETER_STRING,
                 description="Image topic to subscribe to.",
@@ -131,7 +131,7 @@ class ArucoNode(rclpy.node.Node):
 
         self.declare_parameter(
             name="camera_info_topic",
-            value="/camera/camera_info",
+            value="/camera1/camera_info",
             descriptor=ParameterDescriptor(
                 type=ParameterType.PARAMETER_STRING,
                 description="Camera info topic to subscribe to.",
@@ -153,8 +153,11 @@ class ArucoNode(rclpy.node.Node):
         )
         self.get_logger().info(f"Marker size: {self.marker_size}")
         
-        self.marker_size_map = {1: 0.15, 2: 0.15, 3: 0.15, 4: 0.15, 5: 0.15, 11: 0.15, 
-                                6: 0.15, 7: 0.15, 8: 0.15, 9: 0.15, 10: 0.15}
+        self.marker_size_map = {1: 0.10, 2: 0.10, 3: 0.10, 4: 0.10, 5: 0.10, 11: 0.10, 
+                                6: 0.10, 7: 0.10, 8: 0.10, 9: 0.10, 10: 0.10, 12: 0.10, 13: 0.10, 14: 0.10, 15: 0.10, 16: 0.10, 17: 0.10,
+                                18: 0.10, 19: 0.10, 20: 0.10, 21: 0.10, 22: 0.10, 23: 0.10, 24: 0.10, 25: 0.10, 26: 0.10, 27: 0.10, 28: 0.10, 29: 0.10, 30: 0.10,
+                                31: 0.10, 32: 0.10, 33: 0.10, 34: 0.10, 35: 0.10, 36: 0.10, 37: 0.10, 38: 0.10, 39: 0.10, 40: 0.10, 41: 0.10, 42: 0.10, 43: 0.10,
+                                44: 0.10, 45: 0.10, 46: 0.10, 47: 0.10, 48: 0.10, 49: 0.10, 50: 0.10}
         self.get_logger().info(f"Marker size map for marker ids is: {self.marker_size_map}")
 
         dictionary_id_name = (
@@ -255,10 +258,10 @@ class ArucoNode(rclpy.node.Node):
             final_marker_ids = []
             for i, marker_id in enumerate(marker_ids):
                 marker_size = self.marker_size_map[marker_id[0]]
-                if marker_size == 0.05:
+                if marker_size == 0.10:
                     turtlebot_corners.append(corners[i])
                     turtlebot_markers.append(marker_id)
-                elif marker_size == 0.15:
+                elif marker_size == 0.10:
                     goal_corners.append(corners[i])
                     goal_markers.append(marker_id)
 
@@ -266,7 +269,7 @@ class ArucoNode(rclpy.node.Node):
                 goal_rvecs, goal_tvecs = [], []
                 if cv2.__version__ > "4.0.0":
                     goal_rvecs, goal_tvecs, _ = cv2.aruco.estimatePoseSingleMarkers(
-                        goal_corners, 0.15, self.intrinsic_mat, self.distortion
+                        goal_corners, 0.10, self.intrinsic_mat, self.distortion
                     )
                 else:
                     goal_rvecs, goal_tvecs = cv2.aruco.estimatePoseSingleMarkers(
@@ -282,7 +285,7 @@ class ArucoNode(rclpy.node.Node):
                 turtlebot_rvecs, turtlebot_tvecs = [], []
                 if cv2.__version__ > "4.0.0":
                     turtlebot_rvecs, turtlebot_tvecs, _ = cv2.aruco.estimatePoseSingleMarkers(
-                        turtlebot_corners, 0.05, self.intrinsic_mat, self.distortion
+                        turtlebot_corners, 0.10, self.intrinsic_mat, self.distortion
                     )
                 else:
                     turtlebot_rvecs, turtlebot_tvecs = cv2.aruco.estimatePoseSingleMarkers(
