@@ -154,7 +154,7 @@ class ArucoNode(rclpy.node.Node):
         self.get_logger().info(f"Marker size: {self.marker_size}")
         
         self.marker_size_map = {1: 0.10, 2: 0.10, 3: 0.10, 4: 0.10, 5: 0.10, 11: 0.10, 
-                                6: 0.10, 7: 0.10, 8: 0.10, 9: 0.10, 10: 0.10, 12: 0.10, 13: 0.10, 14: 0.10, 15: 0.10, 16: 0.10, 17: 0.10,
+                                6: 0.15, 7: 0.10, 8: 0.10, 9: 0.10, 10: 0.10, 12: 0.10, 13: 0.15, 14: 0.10, 15: 0.10, 16: 0.10, 17: 0.10,
                                 18: 0.10, 19: 0.10, 20: 0.10, 21: 0.10, 22: 0.10, 23: 0.10, 24: 0.10, 25: 0.10, 26: 0.10, 27: 0.10, 28: 0.10, 29: 0.10, 30: 0.10,
                                 31: 0.10, 32: 0.10, 33: 0.10, 34: 0.10, 35: 0.10, 36: 0.10, 37: 0.10, 38: 0.10, 39: 0.10, 40: 0.10, 41: 0.10, 42: 0.10, 43: 0.10,
                                 44: 0.10, 45: 0.10, 46: 0.10, 47: 0.10, 48: 0.10, 49: 0.10, 50: 0.10}
@@ -181,6 +181,7 @@ class ArucoNode(rclpy.node.Node):
         self.get_logger().info(f"Camera frame: {self.camera_frame}")
 
         # Make sure we have a valid dictionary id:
+        dictionary_id2 = None
         try:
             dictionary_id = cv2.aruco.__getattribute__(dictionary_id_name)
             if type(dictionary_id) != type(cv2.aruco.DICT_5X5_100):
@@ -188,6 +189,15 @@ class ArucoNode(rclpy.node.Node):
         except AttributeError:
             self.get_logger().error(
                 "bad aruco_dictionary_id: {}".format(dictionary_id_name)
+            )
+            options = "\n".join([s for s in dir(cv2.aruco) if s.startswith("DICT")])
+            self.get_logger().error("valid options: {}".format(options))
+
+        try:
+            dictionary_id2 = cv2.aruco.__getattribute__("DICT_5X5_250")
+        except AttributeError:
+            self.get_logger().error(
+                "bad aruco_dictionary_id: {}".format("DICT_5X5_250")
             )
             options = "\n".join([s for s in dir(cv2.aruco) if s.startswith("DICT")])
             self.get_logger().error("valid options: {}".format(options))
@@ -215,6 +225,9 @@ class ArucoNode(rclpy.node.Node):
 
         self.aruco_dictionary = cv2.aruco.Dictionary_get(dictionary_id)
         self.aruco_parameters = cv2.aruco.DetectorParameters_create()
+        
+        self.aruco_dictionary2 = cv2.aruco.Dictionary_get(dictionary_id2)
+        self.aruco_parameters2 = cv2.aruco.DetectorParameters_create()
 
         self.bridge = CvBridge()
 
@@ -247,6 +260,15 @@ class ArucoNode(rclpy.node.Node):
             cv_image, self.aruco_dictionary, parameters=self.aruco_parameters
         )
 
+        corners2, marker_ids2, rejected2 = cv2.aruco.detectMarkers(
+            cv_image, self.aruco_dictionary2, parameters=self.aruco_parameters2
+        )
+
+        self.get_logger().info(f"Detected marker ids: {marker_ids} and {marker_ids2}")
+
+        corners = corners + corners2
+        marker_ids = np.concatenate((marker_ids, marker_ids2), axis=0) if marker_ids is not None and marker_ids2 is not None else (marker_ids if marker_ids is not None else marker_ids2)
+
         if marker_ids is not None:
             # process each marker individually to allow for diff marker sizes
             rvecs = []
@@ -258,7 +280,7 @@ class ArucoNode(rclpy.node.Node):
             final_marker_ids = []
             for i, marker_id in enumerate(marker_ids):
                 marker_size = self.marker_size_map[marker_id[0]]
-                if marker_size == 0.10:
+                if marker_size == 0.15:
                     turtlebot_corners.append(corners[i])
                     turtlebot_markers.append(marker_id)
                 elif marker_size == 0.10:
@@ -285,7 +307,7 @@ class ArucoNode(rclpy.node.Node):
                 turtlebot_rvecs, turtlebot_tvecs = [], []
                 if cv2.__version__ > "4.0.0":
                     turtlebot_rvecs, turtlebot_tvecs, _ = cv2.aruco.estimatePoseSingleMarkers(
-                        turtlebot_corners, 0.10, self.intrinsic_mat, self.distortion
+                        turtlebot_corners, 0.15, self.intrinsic_mat, self.distortion
                     )
                 else:
                     turtlebot_rvecs, turtlebot_tvecs = cv2.aruco.estimatePoseSingleMarkers(
