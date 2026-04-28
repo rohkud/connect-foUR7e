@@ -24,9 +24,9 @@ class ConstantTransformPublisher(Node):
         self.br = StaticTransformBroadcaster(self)
 
         # Homogeneous transform G_wrist_3_link->camera_depth_optical
-        G = np.array([[1, 0, 0, -0.025],
-                      [0, 1, 0, 0.13],
-                      [0, 0, 1, 0.0],
+        G = np.array([[-1, 0, 0, 0.0],
+                      [0, 0, 1, 0.16],
+                      [0, 1, 0, -0.13],
                       [0, 0, 0, 1.0]
         ])
 
@@ -42,8 +42,8 @@ class ConstantTransformPublisher(Node):
         q = scipy_rotation.as_quat()
 
         # Populate TransformStamped
-        self.transform.header.frame_id = 'wrist_3_link'
-        self.transform.child_frame_id = 'camera_depth_optical_frame'
+        self.transform.header.frame_id = 'base_link'
+        self.transform.child_frame_id = 'ar_marker_6'
         self.transform.transform.translation.x = G[0, 3]
         self.transform.transform.translation.y = G[1, 3]
         self.transform.transform.translation.z = G[2, 3]

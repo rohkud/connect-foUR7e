@@ -75,7 +75,7 @@ class BoardDetector(Node):
         self.board_data_pub = self.create_publisher(GameBoard, '/board_data', 10)
         
         # Publish the corners once at startup
-        self.publish_corners()
+        self.timer = self.create_timer(1.0, self.publish_corners)
         
         self.get_logger().info('Board Detector initialized')
         self.get_logger().info('Published board corners')

@@ -23,7 +23,8 @@ setup(
     entry_points={
         'console_scripts': [
             'main = planning.main:main',
-            'tf = planning.static_tf_transform:main',
+            'static_tf = planning.static_tf_transform:main',
+            'camera_tf = planning.camera_tf_transform:main',
             'ik = planning.ik:main',
             'transform_cube_pose = planning.transform_cube_pose:main',
             'gripper = planning.gripper:main'

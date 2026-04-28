@@ -34,6 +34,7 @@ class GameStateNode(Node):
         super().__init__('game_state')
 
         self.board = None
+        self.last_board = None
         self.disc_data = None
         self.homography = None
 
@@ -60,10 +61,16 @@ class GameStateNode(Node):
         self.get_logger().info('Game state node started')
 
     def board_callback(self, msg):
+        current_corners = list(zip(msg.corner_x, msg.corner_y))
+
+        # Skip if same as last message
+        if self.last_board == current_corners:
+            return
+
+        self.last_board = current_corners
         self.board = msg
         # Compute homography from board corners to canonical 6x7 board
         self.get_logger().info('Received board corners, computing homography...')
-        self.get_logger().info(f"Board corners: {list(zip(msg.corner_x, msg.corner_y))}")
         if len(msg.corner_x) == 4 and len(msg.corner_y) == 4:
             src_points = np.array([[msg.corner_x[i], msg.corner_y[i]] for i in range(4)], dtype=np.float32)
             # Assuming order: TL, TR, BR, BL
