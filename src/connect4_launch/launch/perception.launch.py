@@ -3,22 +3,6 @@ from launch_ros.actions import Node
 
 def generate_launch_description():
     return LaunchDescription([
-
-        # --- Calibration ---
-        Node(
-            package='board_calibration',
-            executable='board_corners',
-            name='board_corners',
-            output='screen'
-        ),
-
-        Node(
-            package='board_calibration',
-            executable='disc_colors',
-            name='disc_colors',
-            output='screen'
-        ),
-
         # --- Perception ---
         Node(
             package='board_detector',
@@ -80,7 +64,7 @@ def generate_launch_description():
         # --- Planning ---
         Node(
             package='game_planner',
-            executable='game_planner_node',
+            executable='game_planner',
             name='game_planner',
             output='screen'
         ),
