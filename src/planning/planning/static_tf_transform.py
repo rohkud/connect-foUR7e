@@ -24,7 +24,7 @@ class ConstantTransformPublisher(Node):
         self.br = StaticTransformBroadcaster(self)
 
         # Homogeneous transform G_wrist_3_link->camera_depth_optical
-        G = np.array([[-1, 0, 0, 0.0],
+        G = np.array([[-1, 0, 0, 0],
                       [0, 0, 1, 0.16],
                       [0, 1, 0, -0.13],
                       [0, 0, 0, 1.0]

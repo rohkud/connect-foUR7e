@@ -13,6 +13,7 @@ import sympy as sp
 from scipy.spatial.transform import Rotation as R
 from tf2_ros import Buffer, TransformListener, TransformException
 from rclpy.time import Time
+from image_geometry import PinholeCameraModel
 
 class PieceLocalizer(Node):
     def __init__(self):
@@ -62,14 +63,24 @@ class PieceLocalizer(Node):
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
 
+        self.cam_model = PinholeCameraModel()
+
         self.get_logger().info('Piece Localizer initialized')
 
+    def undistort_point(self, u, v):
+        if not self.cam_info_ready:
+            raise RuntimeError("CameraInfo not received yet")
+
+        return self.cam_model.rectifyPoint((u, v))
+
     def camera_info_callback(self, msg: CameraInfo):
+        self.cam_model.fromCameraInfo(msg)
         self.K = np.array(msg.k).reshape(3, 3)
         self.K_inv = np.linalg.inv(self.K)
         self.sympy_K_inv = sp.Matrix(self.K_inv)
 
         self.get_logger().info(f'Received camera intrinsics:\n{self.K}')
+        self.cam_info_ready = True
 
     def tf_matrix(self, tf):
         # Convert geometry_msgs/Transform to 4x4 homogeneous transformation matrix
@@ -128,7 +139,7 @@ class PieceLocalizer(Node):
     def board_callback(self, msg: GameBoard):
         if len(msg.corner_x) == 4 and len(msg.corner_y) == 4:
             src_points = np.array(
-                [[msg.corner_x[i], msg.corner_y[i]] for i in range(4)],
+                [self.undistort_point(msg.corner_x[i], msg.corner_y[i]) for i in range(4)],
                 dtype=np.float32
             )
 
@@ -163,6 +174,7 @@ class PieceLocalizer(Node):
             return
 
         for i, (x, y, color) in enumerate(zip(msg.x, msg.y, msg.color)):
+            x, y = self.undistort_point(x, y)
             transformed = self.apply_homography(self.homography, x, y)
 
             if transformed is None:

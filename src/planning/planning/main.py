@@ -37,6 +37,13 @@ class UR7e_CubeGrasp(Node):
             self, FollowJointTrajectory,
             '/scaled_joint_trajectory_controller/follow_joint_trajectory'
         )
+        
+        self.localized_piece_sub = self.create_subscription(
+            PointStamped,
+            '/localized_pieces',
+            self.localized_piece_callback,
+            10
+        )
 
         self.gripper_cli = self.create_client(Trigger, '/toggle_gripper')
 
@@ -45,15 +52,28 @@ class UR7e_CubeGrasp(Node):
         self.joint_state = None
 
         self.ik_planner = IKPlanner()
+        self.goal = None
 
         self.job_queue = [] # Entries should be of type either JointState or String('toggle_grip')
         while self.joint_state is None:
             self.get_logger().info("Waiting for initial joint state...")
             rclpy.spin_once(self, timeout_sec=1.0)
+
+        while self.goal is None:
+            self.get_logger().info("Waiting for goal state...")
+            rclpy.spin_once(self, timeout_sec=1.0)
+
         self.cube_callback()
 
     def joint_state_callback(self, msg: JointState):
         self.joint_state = msg
+
+    def localized_piece_callback(self, msg: PointStamped):
+        if self.goal is not None:
+            return
+    
+        self.goal = msg.point
+        self.get_logger().info(f"Received localized piece position: {msg.point}")   
 
     def cube_callback(self):
         if self.joint_state is None:
@@ -71,30 +91,37 @@ class UR7e_CubeGrasp(Node):
         Use the following offsets for pre-grasp position:
         z offset: +0.185 (to be above the cube by accounting for gripper length)
         '''
+        x = self.goal.x
+        y = self.goal.y
+        dx = 0.055
+        dy = 0.0
+        # x = 0.2
+        # y = 0.16
         pre_grasp_job = self.ik_planner.compute_ik(self.joint_state,
-                                            0.073,
-                                            0.635,
+                                            x + dx,
+                                            y + dy,
                                             0.5)
         self.job_queue.append(pre_grasp_job)
 
         pre_grasp_job = self.ik_planner.compute_ik(self.joint_state,
-                                    0.073,
-                                    0.635,
-                                    -0.05)
+                                    x + dx,
+                                    y + dy,
+                                    -0.052) # -0.05
         self.job_queue.append(pre_grasp_job)
 
         self.job_queue.append('toggle_grip')
 
         post_grasp_job = self.ik_planner.compute_ik(self.joint_state,
-                                    0.173,
-                                    0.635,
+                                    x + dx,
+                                    y + dy,
                                     0.5)
+        self.job_queue.append(post_grasp_job)
 
         self.job_queue.append('toggle_grip')
 
         post_grasp_job = self.ik_planner.compute_ik(self.joint_state,
-                                            0.073,
-                                            0.635,
+                                            x + dx,
+                                            y + dy,
                                             0.5)
         self.job_queue.append(post_grasp_job)
 
@@ -135,11 +162,28 @@ class UR7e_CubeGrasp(Node):
 
         req = Trigger.Request()
         future = self.gripper_cli.call_async(req)
-        # wait for 2 seconds
         rclpy.spin_until_future_complete(self, future, timeout_sec=2.0)
 
-        self.get_logger().info('Gripper toggled.')
-        self.execute_jobs()  # Proceed to next job
+        if not future.done():
+            self.get_logger().error("Gripper service call timed out")
+            rclpy.shutdown()
+            return
+
+        response = future.result()
+
+        if response is None:
+            self.get_logger().error("Gripper service returned no response")
+            rclpy.shutdown()
+            return
+
+        if response.success:
+            self.get_logger().info(f"Gripper activated: {response.message}")
+        else:
+            self.get_logger().error(f"Gripper failed: {response.message}")
+            rclpy.shutdown()
+            return
+
+        self.execute_jobs()
 
             
     def _execute_joint_trajectory(self, joint_traj):
