@@ -31,8 +31,6 @@ from planning.ik import IKPlanner
 class UR7e_CubeGrasp(Node):
     def __init__(self):
         super().__init__('cube_grasp')
-
-        self.cube_pub = self.create_subscription(PointStamped, '/cube_pose', self.cube_callback, 1)
         self.joint_state_sub = self.create_subscription(JointState, '/joint_states', self.joint_state_callback, 1)
 
         self.exec_ac = ActionClient(
@@ -49,19 +47,17 @@ class UR7e_CubeGrasp(Node):
         self.ik_planner = IKPlanner()
 
         self.job_queue = [] # Entries should be of type either JointState or String('toggle_grip')
+        while self.joint_state is None:
+            self.get_logger().info("Waiting for initial joint state...")
+            rclpy.spin_once(self, timeout_sec=1.0)
+        self.cube_callback()
 
     def joint_state_callback(self, msg: JointState):
         self.joint_state = msg
 
-    def cube_callback(self, cube_pose):
-        if self.cube_pose is not None:
-            return
-
+    def cube_callback(self):
         if self.joint_state is None:
             self.get_logger().info("No joint state yet, cannot proceed")
-            return
-
-        self.cube_pose = cube_pose
 
         # -----------------------------------------------------------
         # TODO: In the following section you will add joint angles to the job queue. 
@@ -78,43 +74,29 @@ class UR7e_CubeGrasp(Node):
         pre_grasp_job = self.ik_planner.compute_ik(self.joint_state,
                                             0.073,
                                             0.635,
-                                            0)
+                                            0.5)
         self.job_queue.append(pre_grasp_job)
 
-        # # 2) Move to Grasp Position (lower the gripper to the cube)
-        # '''
-        # Note that this will again be defined relative to the cube pose. 
-        # DO NOT CHANGE z offset lower than +0.14. 
-        # '''
-        # grasp_job = self.ik_planner.compute_ik(self.joint_state,
-        #                                     self.cube_pose.point.x,
-        #                                     self.cube_pose.point.y,
-        #                                     self.cube_pose.point.z + 0.16)
-        # self.job_queue.append(grasp_job)
+        pre_grasp_job = self.ik_planner.compute_ik(self.joint_state,
+                                    0.073,
+                                    0.635,
+                                    -0.05)
+        self.job_queue.append(pre_grasp_job)
 
-        # # 3) Close the gripper. See job_queue entries defined in init above for how to add this action.
-        # self.job_queue.append('toggle_grip')
+        self.job_queue.append('toggle_grip')
 
-        # # 4) Move back to Pre-Grasp Position
-        # pre_grasp_job = self.ik_planner.compute_ik(self.joint_state,
-        #                             self.cube_pose.point.x - 0.01,
-        #                             self.cube_pose.point.y,
-        #                             self.cube_pose.point.z + 0.185)
-        # self.job_queue.append(pre_grasp_job)
+        post_grasp_job = self.ik_planner.compute_ik(self.joint_state,
+                                    0.173,
+                                    0.635,
+                                    0.5)
 
-        # # 5) Move to release Position
-        # '''
-        # We want the release position to be 0.3m to the left of the initial cube pose.
-        # Which offset will you change to achieve this and in what direction?
-        # '''
-        # release_job = self.ik_planner.compute_ik(self.joint_state,
-        #                                     self.cube_pose.point.x - 0.3,
-        #                                     self.cube_pose.point.y,
-        #                                     self.cube_pose.point.z + 0.185)
-        # self.job_queue.append(release_job)
+        self.job_queue.append('toggle_grip')
 
-        # # 6) Release the gripper
-        # self.job_queue.append('toggle_grip')
+        post_grasp_job = self.ik_planner.compute_ik(self.joint_state,
+                                            0.073,
+                                            0.635,
+                                            0.5)
+        self.job_queue.append(post_grasp_job)
 
         self.execute_jobs()
 

@@ -1,8 +1,19 @@
 from launch import LaunchDescription
 from launch_ros.actions import Node
+from launch.actions import IncludeLaunchDescription
+from launch.launch_description_sources import PythonLaunchDescriptionSource
+from ament_index_python.packages import get_package_share_directory
+from launch.substitutions import LaunchConfiguration
+import os
+
 
 def generate_launch_description():
+    
+    ur_type = LaunchConfiguration("ur_type", default="ur7e")
+    launch_rviz = LaunchConfiguration("launch_rviz", default="true")
+
     return LaunchDescription([
+
         # --- Perception ---
         Node(
             package='board_detector',
@@ -39,6 +50,14 @@ def generate_launch_description():
             name='game_solver',
             output='screen'
         ),
+
+        Node(
+            package='game_planner',
+            executable='game_planner',
+            name='game_planner',
+            output='screen'
+        ),
+
         # --- Transforms ---
         Node(
             package='planning',
@@ -61,12 +80,19 @@ def generate_launch_description():
             name='ik',
             output='screen'
         ),
-        # --- Planning ---
-        Node(
-            package='game_planner',
-            executable='game_planner',
-            name='game_planner',
-            output='screen'
-        ),
 
+        # --- MoveIt ---
+        IncludeLaunchDescription(
+            PythonLaunchDescriptionSource(
+                os.path.join(
+                    get_package_share_directory("ur_moveit_config"),
+                    "launch",
+                    "ur_moveit.launch.py"
+                )
+            ),
+            launch_arguments={
+                "ur_type": ur_type,
+                "launch_rviz": launch_rviz
+            }.items(),
+        ),
     ])
