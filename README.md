@@ -1,5 +1,5 @@
 # connect-foUR7e
-
+https://docs.google.com/document/d/1DzwP1deeW31QpVgI9eP0ryOaBIvRIhxhT5L1bDk_k2U/edit?tab=t.0
 
 ```
 <!-- ros2 launch realsense2_camera rs_launch.py pointcloud.enable:=true
