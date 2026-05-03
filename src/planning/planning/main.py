@@ -120,7 +120,7 @@ class UR7e_CubeGrasp(Node):
                                             0.5)
         self.job_queue.append(pre_grasp_job)
 
-        pre_grasp_job = self.ik_planner.compute_ik(self.joint_state,
+        pre_grasp_job = self.ik_planner.compute_ik(pre_grasp_job,
                                     x + dx,
                                     y + dy,
                                     -0.058) # -0.05
@@ -128,7 +128,7 @@ class UR7e_CubeGrasp(Node):
 
         self.job_queue.append('toggle_grip')
 
-        post_grasp_job = self.ik_planner.compute_ik(self.joint_state,
+        post_grasp_job = self.ik_planner.compute_ik(pre_grasp_job,
                                     x + dx,
                                     y + dy,
                                     0.5)
@@ -138,7 +138,7 @@ class UR7e_CubeGrasp(Node):
         side_down_quat = R.from_euler('z', 90, degrees=True) * R.from_quat([0.0, 1.0, 0.0, 0.0])
         side_down_quat = R.from_euler('y', 90, degrees=True) * side_down_quat
         qx, qy, qz, qw = side_down_quat.as_quat()
-        post_grasp_job = self.ik_planner.compute_ik(self.joint_state,
+        post_grasp_job = self.ik_planner.compute_ik(pre_grasp_job,
                                             x + dx,
                                             y + dy,
                                             0.5, qx=qx, qy=qy, qz=qz, qw=qw)
@@ -147,7 +147,7 @@ class UR7e_CubeGrasp(Node):
         x = self.tr.x
         y = self.tr.y
         z = self.tr.z
-        post_grasp_job = self.ik_planner.compute_ik(self.joint_state,
+        post_grasp_job = self.ik_planner.compute_ik(post_grasp_job,
                                             x,
                                             y,
                                             z, qx=qx, qy=qy, qz=qz, qw=qw) # -0.05
