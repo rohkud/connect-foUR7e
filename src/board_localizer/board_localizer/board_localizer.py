@@ -15,7 +15,7 @@ class BoardLocalizer(Node):
     def __init__(self):
         super().__init__('board_localizer')
 
-        self.board_height = 0.26
+        self.board_height = 0.30
         self.table_z = -0.28
         self.board_z = self.board_height + self.table_z
 
@@ -92,25 +92,25 @@ class BoardLocalizer(Node):
 
             tf = None
             source_frame = "camera1"
-            target_frame = f"ar_marker_6_camera"
-            try:
-                tf = self.tf_buffer.lookup_transform(target_frame, source_frame, Time())
-            except TransformException as ex:
-                self.get_logger().warn(f'Could not transform {source_frame} to {target_frame}: {ex}')
-                return
-
-            g_tag_camera = sp.Matrix(self.tf_matrix(tf))
-
-            source_frame = f"ar_marker_6"
             target_frame = "base_link"
             try:
                 tf = self.tf_buffer.lookup_transform(target_frame, source_frame, Time())
             except TransformException as ex:
                 self.get_logger().warn(f'Could not transform {source_frame} to {target_frame}: {ex}')
                 return
+            g = sp.Matrix(self.tf_matrix(tf))
+            # g_tag_camera = sp.Matrix(self.tf_matrix(tf))
+
+            # source_frame = f"ar_marker_7"
+            # target_frame = "base_link"
+            # try:
+            #     tf = self.tf_buffer.lookup_transform(target_frame, source_frame, Time())
+            # except TransformException as ex:
+            #     self.get_logger().warn(f'Could not transform {source_frame} to {target_frame}: {ex}')
+            #     return
             
-            g_base_tag = sp.Matrix(self.tf_matrix(tf))
-            g = g_base_tag * g_tag_camera
+            # g_base_tag = sp.Matrix(self.tf_matrix(tf))
+            # g = g_base_tag * g_tag_camera
 
             self.g = g
 

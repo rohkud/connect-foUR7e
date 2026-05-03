@@ -43,7 +43,7 @@ class ConstantTransformPublisher(Node):
 
         # Populate TransformStamped
         self.transform.header.frame_id = 'base_link'
-        self.transform.child_frame_id = 'ar_marker_6'
+        self.transform.child_frame_id = 'ar_marker_7'
         self.transform.transform.translation.x = G[0, 3]
         self.transform.transform.translation.y = G[1, 3]
         self.transform.transform.translation.z = G[2, 3]

@@ -110,49 +110,77 @@ class UR7e_CubeGrasp(Node):
         '''
         x = self.goal.x
         y = self.goal.y
-        dx = 0.055
+        # -------------------Baymax OFFSETS---------------
+        # dx = 0.055
+        # dy = 0.0
+        # ------------------------------------------------
+        dx = -.055
         dy = 0.0
         # x = 0.2
         # y = 0.16
-        pre_grasp_job = self.ik_planner.compute_ik(self.joint_state,
+
+        table_height = -0.28
+        tool_height = 0.217
+        tool_width = 0.06
+        safe_position_job = self.ik_planner.compute_ik(self.joint_state,
                                             x + dx,
                                             y + dy,
                                             0.5)
-        self.job_queue.append(pre_grasp_job)
+        self.job_queue.append(safe_position_job)
 
-        pre_grasp_job = self.ik_planner.compute_ik(pre_grasp_job,
+        grasp_position_job = self.ik_planner.compute_ik(safe_position_job,
                                     x + dx,
                                     y + dy,
-                                    -0.058) # -0.05
-        self.job_queue.append(pre_grasp_job)
+                                    table_height + tool_height) # -0.058
+        self.job_queue.append(grasp_position_job)
 
         self.job_queue.append('toggle_grip')
 
-        post_grasp_job = self.ik_planner.compute_ik(pre_grasp_job,
+        post_position_job = self.ik_planner.compute_ik(grasp_position_job,
                                     x + dx,
                                     y + dy,
                                     0.5)
-        self.job_queue.append(post_grasp_job)
+        self.job_queue.append(post_position_job)
 
+        neutral_position_job = self.ik_planner.compute_ik(post_position_job,
+                                    0.0,
+                                    .6,
+                                    0.4)
+        self.job_queue.append(neutral_position_job)
+        
         # Rotate the gripper 90 degrees to the side before placing the piece.
         side_down_quat = R.from_euler('z', 90, degrees=True) * R.from_quat([0.0, 1.0, 0.0, 0.0])
-        side_down_quat = R.from_euler('y', 90, degrees=True) * side_down_quat
+
+        #------------------------------- If baymax, use------------------------- 
+        # side_down_quat = R.from_euler('y', -90, degrees=True) * side_down_quat
+        #-----------------------------------------------------------------------
+        side_down_quat = R.from_euler('y', -90, degrees=True) * side_down_quat
+
         qx, qy, qz, qw = side_down_quat.as_quat()
-        post_grasp_job = self.ik_planner.compute_ik(pre_grasp_job,
-                                            x + dx,
-                                            y + dy,
-                                            0.5, qx=qx, qy=qy, qz=qz, qw=qw)
-        self.job_queue.append(post_grasp_job)
+        rotate_job = self.ik_planner.compute_ik(neutral_position_job,
+                                            0.0,
+                                            .6,
+                                            0.35, qx=qx, qy=qy, qz=qz, qw=qw)
+        self.job_queue.append(rotate_job)
 
         x = self.tr.x
         y = self.tr.y
         z = self.tr.z
-        post_grasp_job = self.ik_planner.compute_ik(post_grasp_job,
-                                            x,
-                                            y,
-                                            z, qx=qx, qy=qy, qz=qz, qw=qw) # -0.05
+        board_position_job = self.ik_planner.compute_ik(rotate_job,
+                                            # x + dx,
+                                            0.05,
+                                            y + tool_width,
+                                            z + tool_width, qx=qx, qy=qy, qz=qz, qw=qw) # -0.05
 
-        self.job_queue.append(post_grasp_job)
+        self.job_queue.append(board_position_job)
+
+        slot_position_job = self.ik_planner.compute_ik(board_position_job,
+                                    # x + dx,
+                                    0.05,
+                                    y + tool_width,
+                                    z, qx=qx, qy=qy, qz=qz, qw=qw) # -0.05
+
+        self.job_queue.append(slot_position_job)
 
         self.job_queue.append('toggle_grip')
 

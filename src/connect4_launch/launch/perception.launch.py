@@ -1,7 +1,8 @@
 from launch import LaunchDescription
 from launch_ros.actions import Node
-from launch.actions import IncludeLaunchDescription
+from launch.actions import IncludeLaunchDescription, RegisterEventHandler
 from launch.launch_description_sources import PythonLaunchDescriptionSource
+from launch.event_handlers import OnProcessStart
 from ament_index_python.packages import get_package_share_directory
 from launch.substitutions import LaunchConfiguration
 import os
@@ -35,6 +36,13 @@ def generate_launch_description():
             name='piece_localization',
             output='screen'
         ),
+        
+        Node(
+            package='board_localizer',
+            executable='board_localizer',
+            name='board_localizer',
+            output='screen'
+        ),
 
         # --- Game Logic ---
         Node(
@@ -59,12 +67,12 @@ def generate_launch_description():
         ),
 
         # --- Transforms ---
-        Node(
-            package='planning',
-            executable='static_tf',
-            name='static_tf',
-            output='screen'
-        ),
+        # Node(
+        #     package='planning',
+        #     executable='static_tf',
+        #     name='static_tf',
+        #     output='screen'
+        # ),
 
         Node(
             package='planning',

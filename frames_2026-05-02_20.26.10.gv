@@ -1,0 +1,19 @@
+digraph G {
+"world" -> "base_link"[label=" Broadcaster: default_authority\nAverage rate: 10000.0\nBuffer length: 0.0\nMost recent transform: 0.0\nOldest transform: 0.0\n"];
+"base_link" -> "base"[label=" Broadcaster: default_authority\nAverage rate: 10000.0\nBuffer length: 0.0\nMost recent transform: 0.0\nOldest transform: 0.0\n"];
+"base_link" -> "base_link_inertia"[label=" Broadcaster: default_authority\nAverage rate: 10000.0\nBuffer length: 0.0\nMost recent transform: 0.0\nOldest transform: 0.0\n"];
+"flange" -> "tool0"[label=" Broadcaster: default_authority\nAverage rate: 10000.0\nBuffer length: 0.0\nMost recent transform: 0.0\nOldest transform: 0.0\n"];
+"wrist_3_link" -> "flange"[label=" Broadcaster: default_authority\nAverage rate: 10000.0\nBuffer length: 0.0\nMost recent transform: 0.0\nOldest transform: 0.0\n"];
+"wrist_2_link" -> "wrist_3_link"[label=" Broadcaster: default_authority\nAverage rate: 19.75\nBuffer length: 4.962\nMost recent transform: 1777778770.504222\nOldest transform: 1777778765.542193\n"];
+"wrist_3_link" -> "ft_frame"[label=" Broadcaster: default_authority\nAverage rate: 10000.0\nBuffer length: 0.0\nMost recent transform: 0.0\nOldest transform: 0.0\n"];
+"upper_arm_link" -> "forearm_link"[label=" Broadcaster: default_authority\nAverage rate: 19.75\nBuffer length: 4.962\nMost recent transform: 1777778770.504222\nOldest transform: 1777778765.542193\n"];
+"shoulder_link" -> "upper_arm_link"[label=" Broadcaster: default_authority\nAverage rate: 19.75\nBuffer length: 4.962\nMost recent transform: 1777778770.504222\nOldest transform: 1777778765.542193\n"];
+"base_link_inertia" -> "shoulder_link"[label=" Broadcaster: default_authority\nAverage rate: 19.75\nBuffer length: 4.962\nMost recent transform: 1777778770.504222\nOldest transform: 1777778765.542193\n"];
+"forearm_link" -> "wrist_1_link"[label=" Broadcaster: default_authority\nAverage rate: 19.75\nBuffer length: 4.962\nMost recent transform: 1777778770.504222\nOldest transform: 1777778765.542193\n"];
+"wrist_1_link" -> "wrist_2_link"[label=" Broadcaster: default_authority\nAverage rate: 19.75\nBuffer length: 4.962\nMost recent transform: 1777778770.504222\nOldest transform: 1777778765.542193\n"];
+"base" -> "tool0_controller"[label=" Broadcaster: default_authority\nAverage rate: 500.249\nBuffer length: 4.01\nMost recent transform: 1777778770.52622\nOldest transform: 1777778766.516216\n"];
+edge [style=invis];
+ subgraph cluster_legend { style=bold; color=black; label ="view_frames Result";
+"Recorded at time: 1777778770.5446193"[ shape=plaintext ] ;
+}->"world";
+}

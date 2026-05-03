@@ -36,6 +36,11 @@ class ConstantTransformPublisher(Node):
             5,
         )
         self.get_logger().info('Constant Transform Publisher initialized')
+        self.g_base_ar = np.array([[-1, 0, 0, 0],
+                      [0, 0, 1, 0.16],
+                      [0, 1, 0, -0.13],
+                      [0, 0, 0, 1.0]
+        ])
 
     def tf_matrix(self, tf):
         # Convert geometry_msgs/Transform to 4x4 homogeneous transformation matrix
@@ -56,21 +61,44 @@ class ConstantTransformPublisher(Node):
         T[0:3, 3] = translation
         return T
     
+    def invert_transform(self, pose):
+        """Invert a pose transformation"""
+        # Invert rotation
+        rot = R.from_quat([pose.orientation.x, pose.orientation.y, 
+                        pose.orientation.z, pose.orientation.w])
+        rot_inv = rot.inv()
+        
+        # Invert translation
+        trans = np.array([pose.position.x, pose.position.y, pose.position.z])
+        trans_inv = -rot_inv.apply(trans)
+        
+        return trans_inv, rot_inv
+
     def aruco_marker_callback(self, msg):
         self.get_logger().info(f"Marker callback triggered with {len(msg.marker_ids)} markers")
         for i, marker_id in enumerate(msg.marker_ids):
-            if marker_id == 6:
+            if marker_id == 7:
                 pose = msg.poses[i]
+                trans_inv, rot_inv = self.invert_transform(pose)
+                g_ar_camera = np.eye(4)
+                g_ar_camera[0:3, 0:3] = rot_inv.as_matrix()
+                g_ar_camera[0:3, 3] = trans_inv
+                g_base_camera = self.g_base_ar @ g_ar_camera
+                
                 t = TransformStamped()
                 t.header.stamp = self.get_clock().now().to_msg()
-                t.header.frame_id = 'camera1'
-                t.child_frame_id = 'ar_marker_6_camera'
-                t.transform.translation.x = pose.position.x
-                t.transform.translation.y = pose.position.y
-                t.transform.translation.z = pose.position.z
-                t.transform.rotation = pose.orientation
+                t.header.frame_id = 'base_link'
+                t.child_frame_id = 'camera1'
+                t.transform.translation.x = g_base_camera[0, 3]
+                t.transform.translation.y = g_base_camera[1, 3]
+                t.transform.translation.z = g_base_camera[2, 3]
+                rot = R.from_matrix(g_base_camera[0:3, 0:3])
+                q = rot.as_quat()
+                t.transform.rotation.x = q[0]
+                t.transform.rotation.y = q[1]
+                t.transform.rotation.z = q[2]
+                t.transform.rotation.w = q[3]
                 self.br.sendTransform(t)
-                self.get_logger().info(f'Broadcasting transform from camera to ar_marker_6')
 
         # tf = None
         # source_frame = "camera1"
