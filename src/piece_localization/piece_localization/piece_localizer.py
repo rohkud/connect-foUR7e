@@ -54,11 +54,16 @@ class PieceLocalizer(Node):
             10
         )
 
+        self.camera_pose_pub = self.create_publisher(PointStamped, 'camera_pose', 10)
+
+
         self.K = None
         self.K_inv = None
         self.sympy_K_inv = None
         self.homography = None
-        self.table_z = -0.25
+        self.table_z = -0.28
+        self.g = None
+        self.cam_info_ready = False
 
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
@@ -81,6 +86,27 @@ class PieceLocalizer(Node):
 
         self.get_logger().info(f'Received camera intrinsics:\n{self.K}')
         self.cam_info_ready = True
+
+        if self.g is not None:
+            self.publish_camera_pose()
+
+    def publish_camera_pose(self):
+        if self.g is None:
+            return
+
+        camera_point = PointStamped()
+        camera_point.header.frame_id = 'base_link'
+        camera_point.header.stamp = self.get_clock().now().to_msg()
+        camera_point.point.x = float(self.g[0, 3])
+        camera_point.point.y = float(self.g[1, 3])
+        camera_point.point.z = float(self.g[2, 3])
+        self.camera_pose_pub.publish(camera_point)
+        self.get_logger().info(
+            f'Published camera pose in base_link: '
+            f'x={camera_point.point.x:.3f}, '
+            f'y={camera_point.point.y:.3f}, '
+            f'z={camera_point.point.z:.3f}'
+        )
 
     def tf_matrix(self, tf):
         # Convert geometry_msgs/Transform to 4x4 homogeneous transformation matrix
@@ -109,7 +135,7 @@ class PieceLocalizer(Node):
 
         tf = None
         source_frame = "camera1"
-        target_frame = "ar_marker_6_camera"
+        target_frame = f"ar_marker_6_camera"
         try:
             tf = self.tf_buffer.lookup_transform(target_frame, source_frame, Time())
         except TransformException as ex:
@@ -118,7 +144,7 @@ class PieceLocalizer(Node):
 
         g_tag_camera = sp.Matrix(self.tf_matrix(tf))
 
-        source_frame = "ar_marker_6"
+        source_frame = f"ar_marker_6"
         target_frame = "base_link"
         try:
             tf = self.tf_buffer.lookup_transform(target_frame, source_frame, Time())
@@ -127,11 +153,16 @@ class PieceLocalizer(Node):
             return
         
         g_base_tag = sp.Matrix(self.tf_matrix(tf))
+        g = g_base_tag * g_tag_camera
 
-        point_base = g_base_tag * g_tag_camera * sp.Matrix([depth_ray[0], depth_ray[1], depth_ray[2], 1])
+        self.g = g
+        self.publish_camera_pose()
+
+        point_base = g * sp.Matrix([depth_ray[0], depth_ray[1], depth_ray[2], 1])
         point_base_z = point_base[2]
 
         depth = sp.solve(sp.Eq(point_base_z, self.table_z), d)
+        
         point_base_3d = point_base.subs(d, depth[0])
 
         return point_base_3d

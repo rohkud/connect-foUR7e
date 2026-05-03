@@ -45,6 +45,15 @@ class UR7e_CubeGrasp(Node):
             10
         )
 
+        self.tl_board_sub = self.create_subscription(
+            PointStamped,
+            '/board_corner_tr_3d',
+            self.tr_board_callback,
+            10
+        )
+
+        self.tr = None
+
         self.gripper_cli = self.create_client(Trigger, '/toggle_gripper')
 
         self.cube_pose = None
@@ -63,7 +72,15 @@ class UR7e_CubeGrasp(Node):
             self.get_logger().info("Waiting for goal state...")
             rclpy.spin_once(self, timeout_sec=1.0)
 
+        while self.tr is None:
+            self.get_logger().info("Waiting for tr state...")
+            rclpy.spin_once(self, timeout_sec=1.0)
+
         self.cube_callback()
+
+    def tr_board_callback(self, msg: PointStamped):
+        self.get_logger().info(f"Received board corner position: {msg.point}")
+        self.tr = msg.point
 
     def joint_state_callback(self, msg: JointState):
         self.joint_state = msg
@@ -106,7 +123,7 @@ class UR7e_CubeGrasp(Node):
         pre_grasp_job = self.ik_planner.compute_ik(self.joint_state,
                                     x + dx,
                                     y + dy,
-                                    -0.052) # -0.05
+                                    -0.058) # -0.05
         self.job_queue.append(pre_grasp_job)
 
         self.job_queue.append('toggle_grip')
@@ -117,13 +134,28 @@ class UR7e_CubeGrasp(Node):
                                     0.5)
         self.job_queue.append(post_grasp_job)
 
-        self.job_queue.append('toggle_grip')
-
+        # Rotate the gripper 90 degrees to the side before placing the piece.
+        side_down_quat = R.from_euler('z', 90, degrees=True) * R.from_quat([0.0, 1.0, 0.0, 0.0])
+        side_down_quat = R.from_euler('y', 90, degrees=True) * side_down_quat
+        qx, qy, qz, qw = side_down_quat.as_quat()
         post_grasp_job = self.ik_planner.compute_ik(self.joint_state,
                                             x + dx,
                                             y + dy,
-                                            0.5)
+                                            0.5, qx=qx, qy=qy, qz=qz, qw=qw)
         self.job_queue.append(post_grasp_job)
+
+        x = self.tr.x
+        y = self.tr.y
+        z = self.tr.z
+        post_grasp_job = self.ik_planner.compute_ik(self.joint_state,
+                                            x,
+                                            y,
+                                            z, qx=qx, qy=qy, qz=qz, qw=qw) # -0.05
+
+        self.job_queue.append(post_grasp_job)
+
+        self.job_queue.append('toggle_grip')
+
 
         self.execute_jobs()
 
