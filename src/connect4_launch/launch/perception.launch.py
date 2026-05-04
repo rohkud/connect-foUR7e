@@ -89,6 +89,14 @@ def generate_launch_description():
             output='screen'
         ),
 
+        # --- Control / Execution ---
+        Node(
+            package='planning',
+            executable='cube_grasp_service',
+            name='cube_grasp_service',
+            output='screen'
+        ),
+
         # --- MoveIt ---
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(

@@ -1,0 +1,7 @@
+Table Pieces
+red: BGR=[31, 59, 105], HSV center=[11, 180, 105]
+  yellow: BGR=[16, 212, 232], HSV center=[27, 237, 232]
+
+Board Pieces
+red: BGR=[1, 28, 135], HSV center=[6, 253, 135]
+  yellow: BGR=[3, 159, 181], HSV center=[26, 251, 181]

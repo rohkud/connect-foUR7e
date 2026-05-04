@@ -13,7 +13,7 @@ from pathlib import Path
 from ament_index_python.packages import get_package_share_directory
 
 
-def bgr_to_hsv_range(bgr_color, h_tolerance=10, s_tolerance=50, v_tolerance=50):
+def bgr_to_hsv_range(bgr_color, h_tolerance=10, s_tolerance=120, v_tolerance=120):
     """Convert BGR color to HSV range with tolerance."""
     bgr_array = np.uint8([[[bgr_color[2], bgr_color[1], bgr_color[0]]]])
     hsv_array = cv2.cvtColor(bgr_array, cv2.COLOR_RGB2HSV)

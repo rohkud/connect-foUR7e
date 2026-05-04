@@ -151,6 +151,7 @@ def main():
         def image_callback(self, msg):
             try:
                 cv_image = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
+                self.get_logger().info(f"Image_size: {cv_image.shape}")
                 self.state['image'] = cv_image
             except Exception as e:
                 self.get_logger().error(f"Failed to convert image: {e}")

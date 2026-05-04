@@ -186,7 +186,7 @@ class DiscDetector(Node):
 
             for contour in contours:
                 area = cv2.contourArea(contour)
-                if area <= 500:
+                if area <= 250:
                     continue
 
                 perimeter = cv2.arcLength(contour, True)
@@ -208,7 +208,7 @@ class DiscDetector(Node):
 
                 self.get_logger().info(
                     f"Disc candidate at ({cx}, {cy}) with circularity {circularity:.2f}")
-
+                
             if points_published > 0:
 
                 img_msg = self.bridge.cv2_to_imgmsg(cv_image, encoding='bgr8')

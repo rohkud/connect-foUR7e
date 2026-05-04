@@ -27,7 +27,8 @@ setup(
             'camera_tf = planning.camera_tf_transform:main',
             'ik = planning.ik:main',
             'transform_cube_pose = planning.transform_cube_pose:main',
-            'gripper = planning.gripper:main'
+            'gripper = planning.gripper:main',
+            'cube_grasp_service = planning.cube_grasp_service:main'
         ],
     },
 )

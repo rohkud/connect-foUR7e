@@ -1,0 +1,5 @@
+geometry_msgs/Point piece_position
+geometry_msgs/Point board_position
+---
+bool success
+string message
