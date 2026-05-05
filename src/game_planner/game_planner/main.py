@@ -4,8 +4,9 @@ import rclpy
 from rclpy.node import Node
 
 from std_msgs.msg import Int8MultiArray, Int8
-from geometry_msgs.msg import Point
+from geometry_msgs.msg import Point, PointStamped
 from game_msgs.msg import DiscLoc2d
+from piece_localization_interfaces.srv import PixelToPoint
 
 from planning_interfaces.srv import RunPlacement
 
@@ -14,7 +15,7 @@ class Connect4Main(Node):
     def __init__(self):
         super().__init__('connect4_main')
 
-        self.declare_parameter('settle_time', 0.3)
+        self.declare_parameter('settle_time', 0.5)
         self.declare_parameter('robot_color', 1)   # 1=red, 2=yellow
         self.declare_parameter('human_color', 2)   # 1=red, 2=yellow
 
@@ -59,9 +60,27 @@ class Connect4Main(Node):
             '/run_piece_placement'
         )
 
+        self.pixel_client = self.create_client(
+            PixelToPoint,
+            '/pixel_to_point'
+        )
+
+        self.top_left_sub = self.create_subscription(PointStamped, '/board_corner_tl_3d', self.top_left_callback, 10)
+        self.top_right_sub = self.create_subscription(PointStamped, '/board_corner_tr_3d', self.top_right_callback, 10)
+        self.tr = None
+        self.tl = None
+
         self.timer = self.create_timer(0.2, self.timer_callback)
 
         self.get_logger().info('amongus.Connect4 main orchestrator started')
+
+    def top_left_callback(self, msg):
+        self.get_logger().debug(f'Received top-left corner: ({msg.point.x:.3f}, {msg.point.y:.3f}, {msg.point.z:.3f})')
+        self.tl = msg.point
+
+    def top_right_callback(self, msg):
+        self.get_logger().debug(f'Received top-right corner: ({msg.point.x:.3f}, {msg.point.y:.3f}, {msg.point.z:.3f})')
+        self.tr = msg.point
 
     def board_callback(self, msg):
         if len(msg.data) != 42:
@@ -165,19 +184,17 @@ class Connect4Main(Node):
         if board_position is None:
             self.get_logger().warn('Could not compute board placement position')
             return
+        
+        self.eror
 
         self.call_robot_service(piece_position, board_position)
 
     def choose_ground_piece(self):
         """
-        Simple version:
-        pick the first detected disc of the robot's color.
-
-        NOTE:
-        This assumes /disc_data gives pixel positions, not 3D positions.
-        If your robot service needs 3D base_link points, replace this with
-        your localized piece topic or 2D-to-3D localizer output.
+        Find a ground piece of the robot's color and convert its pixel coordinates to 3D.
         """
+        if self.latest_disc_data is None:
+            return None
 
         target_color = 'red' if self.robot_color == 1 else 'yellow'
 
@@ -187,33 +204,69 @@ class Connect4Main(Node):
             self.latest_disc_data.color
         ):
             if color == target_color:
-                p = Point()
-                p.x = float(x)
-                p.y = float(y)
-                p.z = 0.0
-                return p
+                self.get_logger().info(
+                    f'Found {target_color} piece at pixel ({x:.1f}, {y:.1f}), converting to 3D'
+                )
 
+                # Call the pixel to point service
+                if not self.pixel_client.wait_for_service(timeout_sec=1.0):
+                    self.get_logger().error('PixelToPoint service not available')
+                    return None
+
+                req = PixelToPoint.Request()
+                req.u = float(x)
+                req.v = float(y)
+
+                future = self.pixel_client.call_async(req)
+                
+                # Wait for result (this is blocking, but okay for now)
+                rclpy.spin_until_future_complete(self, future, timeout_sec=1.0)
+                
+                if future.done() and future.result() is not None:
+                    result = future.result()
+                    if result.success:
+                        p = Point()
+                        p.x = result.point.point.x
+                        p.y = result.point.point.y
+                        p.z = result.point.point.z
+                        self.get_logger().info(f'Converted to 3D: ({p.x:.3f}, {p.y:.3f}, {p.z:.3f})')
+                        return p
+                    else:
+                        self.get_logger().warn(f'Pixel to 3D conversion failed: {result.message}')
+                else:
+                    self.get_logger().warn('Pixel to 3D service call failed or timed out')
+
+        self.get_logger().warn(f'No {target_color} pieces found on ground')
         return None
 
     def column_to_board_position(self, col):
         """
-        Placeholder board position.
-
-        Replace this with your real board localizer / slot localization logic.
-        For now, this maps column number to an approximate physical x offset.
+        Calculate the 3D position for dropping a piece into the specified column.
+        
+        Assumes we have board corners: tl (top-left), tr (top-right)
+        Interpolates along the top edge of the board for the column position.
         """
+
+        if self.tl is None or self.tr is None:
+            self.get_logger().error('Board corners not available for positioning')
+            return None
 
         p = Point()
 
-        base_x = 0.05
-        base_y = 0.60
-        base_z = 0.04
+        # For 7 columns (0-6), there are 6 intervals
+        # Interpolate x position along the top edge from left to right
+        p.x = self.tl.x + col * (self.tr.x - self.tl.x) / 6.0
+        
+        # Interpolate y position along the top edge
+        p.y = self.tl.y + col * (self.tr.y - self.tl.y) / 6.0
+        
+        # Add small offset downward for piece placement (adjust as needed)
         slot_spacing = 0.035
-
-        p.x = base_x + (col - 3) * slot_spacing
-        p.y = base_y
-        p.z = base_z
-
+        p.y += slot_spacing
+        
+        p.z = 0.0  # Assume board is at z=0, adjust if needed
+        
+        self.get_logger().debug(f'Column {col} position: ({p.x:.3f}, {p.y:.3f}, {p.z:.3f})')
         return p
 
     def call_robot_service(self, piece_position, board_position):

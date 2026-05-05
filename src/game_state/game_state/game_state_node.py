@@ -29,11 +29,18 @@ from sensor_msgs.msg import Image
 from cv_bridge import CvBridge
 import numpy as np
 import cv2
+import importlib
+import sys
+import os
+import time
 
 
 class GameStateNode(Node):
     def __init__(self):
         super().__init__('game_state')
+
+        # Clear Python caches to ensure fresh imports during development
+        self._clear_caches()
 
         self.bridge = CvBridge()
         self.board = None
@@ -78,6 +85,51 @@ class GameStateNode(Node):
         )
 
         self.get_logger().info('Game state node started')
+
+    def _clear_caches(self):
+        """Clear Python import caches to ensure fresh code loading during development."""
+        try:
+            # Check if source files have been modified recently (within last 60 seconds)
+            current_file = os.path.abspath(__file__)
+            if os.path.exists(current_file):
+                mtime = os.path.getmtime(current_file)
+                if time.time() - mtime < 60:  # Modified within last minute
+                    self.get_logger().info('Source file recently modified, clearing caches...')
+                    
+                    # Clear importlib caches
+                    importlib.invalidate_caches()
+                    
+                    # Clear specific ROS2-related modules from sys.modules if they exist
+                    modules_to_clear = [
+                        'game_msgs',
+                        'game_msgs.msg'
+                    ]
+                    
+                    for module_name in modules_to_clear:
+                        if module_name in sys.modules:
+                            del sys.modules[module_name]
+                            self.get_logger().info(f'Cleared cache for module: {module_name}')
+                    
+                    # Also clear any __pycache__ directories in the source
+                    self._clear_pycache()
+                else:
+                    self.get_logger().debug('Source file not recently modified, skipping cache clear')
+            
+        except Exception as e:
+            self.get_logger().warn(f'Failed to clear caches: {e}')
+
+    def _clear_pycache(self):
+        """Clear __pycache__ directories in the workspace."""
+        try:
+            workspace_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+            for root, dirs, files in os.walk(workspace_root):
+                if '__pycache__' in dirs:
+                    pycache_path = os.path.join(root, '__pycache__')
+                    import shutil
+                    shutil.rmtree(pycache_path)
+                    self.get_logger().info(f'Removed __pycache__: {pycache_path}')
+        except Exception as e:
+            self.get_logger().warn(f'Failed to clear __pycache__: {e}')
 
     def board_callback(self, msg):
         current_corners = list(zip(msg.corner_x, msg.corner_y))

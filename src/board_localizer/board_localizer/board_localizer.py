@@ -99,19 +99,6 @@ class BoardLocalizer(Node):
                 self.get_logger().warn(f'Could not transform {source_frame} to {target_frame}: {ex}')
                 return
             g = sp.Matrix(self.tf_matrix(tf))
-            # g_tag_camera = sp.Matrix(self.tf_matrix(tf))
-
-            # source_frame = f"ar_marker_7"
-            # target_frame = "base_link"
-            # try:
-            #     tf = self.tf_buffer.lookup_transform(target_frame, source_frame, Time())
-            # except TransformException as ex:
-            #     self.get_logger().warn(f'Could not transform {source_frame} to {target_frame}: {ex}')
-            #     return
-            
-            # g_base_tag = sp.Matrix(self.tf_matrix(tf))
-            # g = g_base_tag * g_tag_camera
-
             self.g = g
 
             point_base = g * sp.Matrix([depth_ray[0], depth_ray[1], depth_ray[2], 1])
