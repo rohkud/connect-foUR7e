@@ -29,58 +29,15 @@ import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import Image
 from geometry_msgs.msg import PolygonStamped, Point32
-from game_msgs.msg import DiscLoc2d
+from game_msgs.msg import DiscLoc2d, HsvColor
 from cv_bridge import CvBridge
 import cv2
 import numpy as np
-import json
-import os
-
-from ament_index_python.packages import get_package_share_directory
-
-
-def load_color_config(config_file):
-    """Load color configuration from JSON file or return defaults."""
-    default_config = {
-        'red': {
-            'lower_hsv': [0, 70, 70],
-            'upper_hsv': [10, 255, 255]
-        },
-        'yellow': {
-            'lower_hsv': [25, 50, 50],
-            'upper_hsv': [35, 255, 255]
-        }
-    }
-    
-    if os.path.exists(config_file):
-        try:
-            with open(config_file, 'r') as f:
-                config = json.load(f)
-            # Validate config has required fields
-            for color in ['red', 'yellow']:
-                if color not in config or 'lower_hsv' not in config[color] or 'upper_hsv' not in config[color]:
-                    self.get_logger().warn(f"Invalid color config for {color}, using defaults")
-                    config[color] = default_config[color]
-            return config
-        except Exception as e:
-            print(f"Error reading color config: {e}")
-            return default_config
-    
-    return default_config
-
 
 class DiscDetector(Node):
     def __init__(self):
         super().__init__('disc_detector')
         self.bridge = CvBridge()
-        
-        # Load color configuration
-        config_file = os.path.join(
-            get_package_share_directory('board_calibration'),
-            'color_config.json'
-        )
-        self.color_config = load_color_config(config_file)
-        self.get_logger().info(f"Loaded color config: {self.color_config}")
         
         self.image_sub = self.create_subscription(
             Image,
@@ -88,6 +45,21 @@ class DiscDetector(Node):
             self.image_callback,
             10
         )
+        self.red_sub = self.create_subscription(
+            HsvColor,
+            '/disc_color_red',
+            self.red_color_callback,
+            10
+        )
+        self.yellow_sub = self.create_subscription(
+            HsvColor,
+            '/disc_color_yellow',
+            self.yellow_color_callback,
+            10
+        )
+
+        self.color_config = {}
+
         self.red_points_pub = self.create_publisher(PolygonStamped, f'/disc_points_red', 10)
         self.yellow_points_pub = self.create_publisher(PolygonStamped, f'/disc_points_yellow', 10)
         self.red_image_pub = self.create_publisher(Image, f'/disc_image_red', 10)
@@ -96,6 +68,20 @@ class DiscDetector(Node):
         self.yellow_mask_pub = self.create_publisher(Image, f'/disc_mask_yellow', 10)
         self.disc_data_pub = self.create_publisher(DiscLoc2d, f'/disc_data', 10)
         self.get_logger().info("Disc detector node started")
+
+    def red_color_callback(self, msg):
+        self.get_logger().debug("Received red color config")
+        self.color_config['red'] = {
+            'lower_hsv': msg.lower,
+            'upper_hsv': msg.upper
+        }
+
+    def yellow_color_callback(self, msg):
+        self.get_logger().debug("Received yellow color config")
+        self.color_config['yellow'] = {
+            'lower_hsv': msg.lower,
+            'upper_hsv': msg.upper
+        }
 
     def image_callback(self, msg):
         red_candidates = self.image_callback_color(msg, 'red')

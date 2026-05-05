@@ -14,6 +14,7 @@ find_package(rosidl_default_generators REQUIRED)
 rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/GameBoard.msg"
   "msg/DiscLoc2d.msg"
+  "msg/HsvColor.msg"
 )
 find_package(rosidl_default_runtime REQUIRED)
 ament_export_dependencies(rosidl_default_runtime)
