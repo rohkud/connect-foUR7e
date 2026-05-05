@@ -12,6 +12,16 @@ def generate_launch_description():
     
     ur_type = LaunchConfiguration("ur_type", default="ur7e")
     launch_rviz = LaunchConfiguration("launch_rviz", default="true")
+    aruco_params = os.path.join(
+        get_package_share_directory('connect4_launch'),
+        'config',
+        'perception_parameters.yaml'
+        )
+    camera_tf_params = os.path.join(
+        get_package_share_directory('connect4_launch'),
+        'config',
+        'perception_parameters.yaml'
+        )
 
     return LaunchDescription([
 
@@ -69,10 +79,18 @@ def generate_launch_description():
         # ),
 
         Node(
-            package='planning',
+            package='connect4_launch',
+            executable='aruco_node',
+            name='aruco_node',
+            parameters=[aruco_params]
+        ),
+
+        Node(
+            package='connect4_launch',
             executable='camera_tf',
             name='camera_tf',
-            output='screen'
+            output='screen',
+            parameters=[camera_tf_params]
         ),
 
         # --- IK Solver ---

@@ -121,6 +121,15 @@ class ArucoNode(rclpy.node.Node):
         )
 
         self.declare_parameter(
+            name="robot_marker_id",
+            value=6,   # default
+            descriptor=ParameterDescriptor(
+                type=ParameterType.PARAMETER_INTEGER,
+                description="Aruco marker ID mounted on the robot/base.",
+            ),
+        )
+        
+        self.declare_parameter(
             name="image_topic",
             value="/camera1/image_raw",
             descriptor=ParameterDescriptor(
@@ -151,34 +160,46 @@ class ArucoNode(rclpy.node.Node):
         self.marker_size = (
             self.get_parameter("marker_size").get_parameter_value().double_value
         )
-        self.get_logger().info(f"Marker size: {self.marker_size}")
+        self.get_logger().debug(f"Marker size: {self.marker_size}")
         
-        self.marker_size_map = {1: 0.10, 2: 0.10, 3: 0.10, 4: 0.10, 5: 0.10, 11: 0.10, 
-                                6: 0.10, 7: 0.15, 8: 0.10, 9: 0.10, 10: 0.10, 12: 0.10, 13: 0.15, 14: 0.10, 15: 0.10, 16: 0.10, 17: 0.10,
-                                18: 0.10, 19: 0.10, 20: 0.10, 21: 0.10, 22: 0.10, 23: 0.10, 24: 0.10, 25: 0.10, 26: 0.10, 27: 0.10, 28: 0.10, 29: 0.10, 30: 0.10,
-                                31: 0.10, 32: 0.10, 33: 0.10, 34: 0.10, 35: 0.10, 36: 0.10, 37: 0.10, 38: 0.10, 39: 0.10, 40: 0.10, 41: 0.10, 42: 0.10, 43: 0.10,
-                                44: 0.10, 45: 0.10, 46: 0.10, 47: 0.10, 48: 0.10, 49: 0.10, 50: 0.10}
-        self.get_logger().info(f"Marker size map for marker ids is: {self.marker_size_map}")
+        self.marker_size_map = {i: 0.10 for i in range(1, 51)}
+
+        # Robot/base marker is 0.15 m
+        self.robot_marker_id = (
+            self.get_parameter("robot_marker_id")
+            .get_parameter_value()
+            .integer_value
+        )
+
+        self.marker_size_map[self.robot_marker_id] = 0.15
+
+        self.get_logger().debug(
+            f"Robot marker id: {self.robot_marker_id}"
+        )
+
+        self.get_logger().debug(
+            f"Marker size map: {self.marker_size_map}"
+        )
 
         dictionary_id_name = (
             self.get_parameter("aruco_dictionary_id").get_parameter_value().string_value
         )
-        self.get_logger().info(f"Marker type: {dictionary_id_name}")
+        self.get_logger().debug(f"Marker type: {dictionary_id_name}")
 
         image_topic = (
             self.get_parameter("image_topic").get_parameter_value().string_value
         )
-        self.get_logger().info(f"Image topic: {image_topic}")
+        self.get_logger().debug(f"Image topic: {image_topic}")
 
         info_topic = (
             self.get_parameter("camera_info_topic").get_parameter_value().string_value
         )
-        self.get_logger().info(f"Image info topic: {info_topic}")
+        self.get_logger().debug(f"Image info topic: {info_topic}")
 
         self.camera_frame = (
             self.get_parameter("camera_frame").get_parameter_value().string_value
         )
-        self.get_logger().info(f"Camera frame: {self.camera_frame}")
+        self.get_logger().debug(f"Camera frame: {self.camera_frame}")
 
         # Make sure we have a valid dictionary id:
         dictionary_id2 = None
@@ -264,7 +285,7 @@ class ArucoNode(rclpy.node.Node):
             cv_image, self.aruco_dictionary2, parameters=self.aruco_parameters2
         )
 
-        self.get_logger().info(f"Detected marker ids: {marker_ids} and {marker_ids2}")
+        self.get_logger().debug(f"Detected marker ids: {marker_ids} and {marker_ids2}")
 
         corners = corners + corners2
         marker_ids = np.concatenate((marker_ids, marker_ids2), axis=0) if marker_ids is not None and marker_ids2 is not None else (marker_ids if marker_ids is not None else marker_ids2)
@@ -297,8 +318,8 @@ class ArucoNode(rclpy.node.Node):
                     goal_rvecs, goal_tvecs = cv2.aruco.estimatePoseSingleMarkers(
                         goal_corners, goal_markers, self.intrinsic_mat, self.distortion
                     )
-                self.get_logger().info(f"info is {goal_rvecs}, {goal_tvecs}")
-                self.get_logger().info(f"info is {goal_markers}")
+                self.get_logger().debug(f"info is {goal_rvecs}, {goal_tvecs}")
+                self.get_logger().debug(f"info is {goal_markers}")
                 rvecs.extend(goal_rvecs)
                 tvecs.extend(goal_tvecs)
                 final_marker_ids.extend(goal_markers)
@@ -318,6 +339,8 @@ class ArucoNode(rclpy.node.Node):
                 final_marker_ids.extend(turtlebot_markers)
 
             for i, marker_id in enumerate(final_marker_ids):
+                if marker_id[0] != self.robot_marker_id:
+                    continue
                 pose = Pose()
                 pose.position.x = tvecs[i][0][0]
                 pose.position.y = tvecs[i][0][1]

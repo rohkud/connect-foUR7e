@@ -6,3 +6,7 @@
     image_topic: /camera1/image_raw
     camera_info_topic: /camera1/camera_info
     camera_frame: camera1
+
+/camera_tf:
+  ros__parameters:
+    robot_marker_id: 6

@@ -1,4 +1,6 @@
 from setuptools import find_packages, setup
+import os
+from glob import glob
 
 package_name = 'connect4_launch'
 
@@ -11,6 +13,8 @@ setup(
             ['resource/connect4_launch']),
         ('share/connect4_launch', ['package.xml']),
         ('share/connect4_launch/launch', ['launch/perception.launch.py']),
+        (os.path.join('share', package_name, 'config'), glob('config/*.yaml'))
+
     ],
     install_requires=['setuptools'],
     zip_safe=True,
@@ -25,6 +29,8 @@ setup(
     },
     entry_points={
         'console_scripts': [
+            'aruco_node = connect4_launch.aruco_node:main',
+            'camera_tf = connect4_launch.camera_tf_transform:main',
         ],
     },
 )

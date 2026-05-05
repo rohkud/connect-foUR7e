@@ -221,9 +221,12 @@ class Connect4Main(Node):
                 return
 
             piece_position = Point()
-            piece_position.x = result.point.point.x
-            piece_position.y = result.point.point.y
-            piece_position.z = result.point.point.z
+            # piece_position.x = result.point.point.x
+            # piece_position.y = result.point.point.y
+            # piece_position.z = result.point.point.z
+            piece_position.x = .2
+            piece_position.y = 0.6
+            piece_position.z = 0.0
 
             self.get_logger().warn(
                 f'amongus. Pixel converted to 3D: '
@@ -231,6 +234,10 @@ class Connect4Main(Node):
             )
 
             board_position = self.column_to_board_position(self.latest_move)
+
+            board_position.x = -0.2
+            board_position.y = 0.6
+            board_position.z = 0.0
 
             if board_position is None:
                 self.get_logger().warn('amongus. Could not compute board placement position')

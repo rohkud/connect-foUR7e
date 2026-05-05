@@ -18,13 +18,29 @@ from tf2_ros import TransformBroadcaster
 from scipy.spatial.transform import Rotation as R
 from ros2_aruco_interfaces.msg import ArucoMarkers
 from tf2_ros import Buffer, TransformListener, TransformException
+from rcl_interfaces.msg import ParameterDescriptor, ParameterType
+
 import numpy as np
 from rclpy.time import Time
 
 class ConstantTransformPublisher(Node):
     def __init__(self):
-        super().__init__('constant_tf_publisher')
+        super().__init__('camera_tf')
         self.br = TransformBroadcaster(self)
+        self.declare_parameter(
+            name="robot_marker_id",
+            value=6,   # default
+            descriptor=ParameterDescriptor(
+                type=ParameterType.PARAMETER_INTEGER,
+                description="Aruco marker ID mounted on the robot/base.",
+            ),
+        )
+
+        self.robot_marker_id = (
+            self.get_parameter("robot_marker_id")
+            .get_parameter_value()
+            .integer_value
+        )
 
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
@@ -77,7 +93,7 @@ class ConstantTransformPublisher(Node):
     def aruco_marker_callback(self, msg):
         self.get_logger().debug(f"Marker callback triggered with {len(msg.marker_ids)} markers")
         for i, marker_id in enumerate(msg.marker_ids):
-            if marker_id == 7:
+            if marker_id == self.robot_marker_id:
                 pose = msg.poses[i]
                 trans_inv, rot_inv = self.invert_transform(pose)
                 g_ar_camera = np.eye(4)

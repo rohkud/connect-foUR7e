@@ -7,6 +7,13 @@
   <maintainer email="rohankudchadker@berkeley.edu">ee106a-aab</maintainer>
   <license>TODO: License declaration</license>
 
+  <depend>ros2_aruco_interfaces</depend>
+  <depend>tf2_ros</depend>
+  <depend>scipy</depend>
+  <depend>geometry_msgs</depend>
+  <depend>rcl_interfaces</depend>
+  <depend>rclpy</depend>
+
   <test_depend>ament_copyright</test_depend>
   <test_depend>ament_flake8</test_depend>
   <test_depend>ament_pep257</test_depend>

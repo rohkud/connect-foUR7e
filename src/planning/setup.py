@@ -25,7 +25,6 @@ setup(
             'main = planning.main:main',
             'debug = planning.debug:main',
             'static_tf = planning.static_tf_transform:main',
-            'camera_tf = planning.camera_tf_transform:main',
             'ik = planning.ik:main',
             'transform_cube_pose = planning.transform_cube_pose:main',
             'gripper = planning.gripper:main'
