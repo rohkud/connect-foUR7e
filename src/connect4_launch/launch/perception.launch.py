@@ -24,13 +24,6 @@ def generate_launch_description():
         ),
 
         Node(
-            package='disc_detector',
-            executable='disc_node',
-            name='disc_detector',
-            output='screen'
-        ),
-        
-        Node(
             package='board_localizer',
             executable='board_localizer',
             name='board_localizer',

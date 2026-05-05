@@ -90,9 +90,14 @@ class ColorPickerNode(Node):
         
         # Publish the corners once at startup
         self.timer = self.create_timer(1.0, self.publish_corners)
+        self.corners = None
         self.get_logger().info("Board Corner Picker started. Click four board corners in order: TL, TR, BR, BL.")
     
     def image_callback(self, msg):
+
+        if len(self.state['corners']) == 4:
+            self.corners = self.state['corners']
+            return  # No need to process more images once corners are selected
         try:
             cv_image = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
             self.get_logger().info(f"Image_size: {cv_image.shape}")
@@ -142,10 +147,11 @@ class ColorPickerNode(Node):
             cv2.destroyAllWindows()
 
     def publish_corners(self):
-        if self.state['selected'] and len(self.state['corners']) == 4:
+        
+        if self.corners:
             board_state_msg = GameBoard()
-            board_state_msg.corner_x = [float(point[0]) for point in self.state['corners']]
-            board_state_msg.corner_y = [float(point[1]) for point in self.state['corners']]
+            board_state_msg.corner_x = [float(point[0]) for point in self.corners]
+            board_state_msg.corner_y = [float(point[1]) for point in self.corners]
             self.board_data_pub.publish(board_state_msg)
 
 
