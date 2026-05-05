@@ -15,28 +15,27 @@ class Connect4Main(Node):
     def __init__(self):
         super().__init__('connect4_main')
 
-        self.declare_parameter('settle_time', 0.5)
         self.declare_parameter('robot_color', 1)   # 1=red, 2=yellow
         self.declare_parameter('human_color', 2)   # 1=red, 2=yellow
 
-        self.settle_time = self.get_parameter('settle_time').value
         self.robot_color = self.get_parameter('robot_color').value
         self.human_color = self.get_parameter('human_color').value
 
-        self.last_seen_board = None
         self.last_stable_board = None
-        self.pending_board = None
-        self.last_change_time = None
 
         self.latest_move = None
         self.latest_disc_data = None
 
         self.robot_busy = False
         self.waiting_for_solver = False
+        self.pixel_request_in_progress = False
+
+        self.tl = None
+        self.tr = None
 
         self.board_sub = self.create_subscription(
             Int8MultiArray,
-            '/game_solver/board',
+            '/game_planner/stable_board',
             self.board_callback,
             10
         )
@@ -55,6 +54,20 @@ class Connect4Main(Node):
             10
         )
 
+        self.top_left_sub = self.create_subscription(
+            PointStamped,
+            '/board_corner_tl_3d',
+            self.top_left_callback,
+            10
+        )
+
+        self.top_right_sub = self.create_subscription(
+            PointStamped,
+            '/board_corner_tr_3d',
+            self.top_right_callback,
+            10
+        )
+
         self.place_client = self.create_client(
             RunPlacement,
             '/run_piece_placement'
@@ -65,83 +78,42 @@ class Connect4Main(Node):
             '/pixel_to_point'
         )
 
-        self.top_left_sub = self.create_subscription(PointStamped, '/board_corner_tl_3d', self.top_left_callback, 10)
-        self.top_right_sub = self.create_subscription(PointStamped, '/board_corner_tr_3d', self.top_right_callback, 10)
-        self.tr = None
-        self.tl = None
-
-        self.timer = self.create_timer(0.2, self.timer_callback)
-
-        self.get_logger().info('amongus.Connect4 main orchestrator started')
+        self.get_logger().warn('amongus. Connect4 main orchestrator started')
 
     def top_left_callback(self, msg):
-        self.get_logger().debug(f'Received top-left corner: ({msg.point.x:.3f}, {msg.point.y:.3f}, {msg.point.z:.3f})')
         self.tl = msg.point
 
     def top_right_callback(self, msg):
-        self.get_logger().debug(f'Received top-right corner: ({msg.point.x:.3f}, {msg.point.y:.3f}, {msg.point.z:.3f})')
         self.tr = msg.point
 
     def board_callback(self, msg):
         if len(msg.data) != 42:
             return
 
-        board = tuple(msg.data)
-
-        if self.last_seen_board != board:
-            self.last_seen_board = board
-            self.last_change_time = self.get_clock().now()
-            self.pending_board = board
-
-    def move_callback(self, msg):
-        self.latest_move = msg.data
-        self.get_logger().info(f'Received solver move: column {self.latest_move}')
-
-        if self.waiting_for_solver and not self.robot_busy:
-            self.try_run_robot()
-
-    def disc_callback(self, msg):
-        self.latest_disc_data = msg
-
-    def timer_callback(self):
-        if self.robot_busy:
-            return
-
-        if self.pending_board is None or self.last_change_time is None:
-            return
-
-        now = self.get_clock().now()
-        elapsed = (now - self.last_change_time).nanoseconds / 1e9
-
-        if elapsed < self.settle_time:
-            self.get_logger().warn(
-                f'amongus. Waiting for board to settle... {elapsed:.2f}s elapsed'
-            )
-            return
-
-        stable_board = self.pending_board
+        current_board = tuple(msg.data)
 
         if self.last_stable_board is None:
-            self.last_stable_board = stable_board
+            self.last_stable_board = current_board
+            self.get_logger().warn('amongus. Initial board saved')
             return
 
-        if stable_board == self.last_stable_board:
+        if current_board == self.last_stable_board:
             return
 
-        changes = self.get_new_pieces(self.last_stable_board, stable_board)
+        changes = self.get_new_pieces(self.last_stable_board, current_board)
 
         if len(changes) != 1:
             self.get_logger().warn(
                 f'amongus. Ignoring board change because {len(changes)} new pieces were detected'
             )
-            self.last_stable_board = stable_board
+            self.last_stable_board = current_board
             return
 
         index, color = changes[0]
 
         if color != self.human_color:
             self.get_logger().warn('amongus. Board changed, but it was not the human color')
-            self.last_stable_board = stable_board
+            self.last_stable_board = current_board
             return
 
         row = index // 7
@@ -151,11 +123,21 @@ class Connect4Main(Node):
             f'amongus. Human move detected at row={row}, col={col}. Waiting for solver.'
         )
 
-        self.last_stable_board = stable_board
+        self.last_stable_board = current_board
         self.waiting_for_solver = True
 
-        if self.latest_move is not None:
+        if self.latest_move is not None and not self.robot_busy:
             self.try_run_robot()
+
+    def move_callback(self, msg):
+        self.latest_move = msg.data
+        self.get_logger().warn(f'amongus. Received solver move: column {self.latest_move}')
+
+        if self.waiting_for_solver and not self.robot_busy:
+            self.try_run_robot()
+
+    def disc_callback(self, msg):
+        self.latest_disc_data = msg
 
     def get_new_pieces(self, old_board, new_board):
         changes = []
@@ -167,33 +149,30 @@ class Connect4Main(Node):
         return changes
 
     def try_run_robot(self):
+        self.get_logger().warn('amongus. try_run_robot called')
+
+        if self.robot_busy:
+            self.get_logger().warn('amongus. Robot already busy')
+            return
+
         if self.latest_move is None:
-            self.get_logger().warn('No solver move available yet')
+            self.get_logger().warn('amongus. No solver move available yet')
             return
 
         if self.latest_disc_data is None:
-            self.get_logger().warn('No disc data available yet')
+            self.get_logger().warn('amongus. No disc data available yet')
             return
 
-        piece_position = self.choose_ground_piece()
-        if piece_position is None:
-            self.get_logger().warn('Could not find a ground piece to pick up')
-            return
+        self.robot_busy = True
+        self.pixel_request_in_progress = True
 
-        board_position = self.column_to_board_position(self.latest_move)
-        if board_position is None:
-            self.get_logger().warn('Could not compute board placement position')
-            return
-        
-        self.call_robot_service(piece_position, board_position)
+        success = self.choose_ground_piece_async()
 
-    def choose_ground_piece(self):
-        """
-        Find a ground piece of the robot's color and convert its pixel coordinates to 3D.
-        """
-        if self.latest_disc_data is None:
-            return None
+        if not success:
+            self.robot_busy = False
+            self.pixel_request_in_progress = False
 
+    def choose_ground_piece_async(self):
         target_color = 'red' if self.robot_color == 1 else 'yellow'
 
         for x, y, color in zip(
@@ -202,85 +181,107 @@ class Connect4Main(Node):
             self.latest_disc_data.color
         ):
             if color == target_color:
-                self.get_logger().info(
-                    f'Found {target_color} piece at pixel ({x:.1f}, {y:.1f}), converting to 3D'
+                self.get_logger().warn(
+                    f'amongus. Found {target_color} piece at pixel ({x:.1f}, {y:.1f})'
                 )
 
-                # Call the pixel to point service
                 if not self.pixel_client.wait_for_service(timeout_sec=1.0):
-                    self.get_logger().error('PixelToPoint service not available')
-                    return None
+                    self.get_logger().error('amongus. PixelToPoint service not available')
+                    return False
 
                 req = PixelToPoint.Request()
                 req.u = float(x)
                 req.v = float(y)
 
                 future = self.pixel_client.call_async(req)
-                
-                # Wait for result (this is blocking, but okay for now)
-                rclpy.spin_until_future_complete(self, future, timeout_sec=1.0)
-                
-                if future.done() and future.result() is not None:
-                    result = future.result()
-                    if result.success:
-                        p = Point()
-                        p.x = result.point.point.x
-                        p.y = result.point.point.y
-                        p.z = result.point.point.z
-                        self.get_logger().info(f'Converted to 3D: ({p.x:.3f}, {p.y:.3f}, {p.z:.3f})')
-                        return p
-                    else:
-                        self.get_logger().warn(f'Pixel to 3D conversion failed: {result.message}')
-                else:
-                    self.get_logger().warn('Pixel to 3D service call failed or timed out')
+                future.add_done_callback(self.pixel_to_point_done_callback)
 
-        self.get_logger().warn(f'No {target_color} pieces found on ground')
-        return None
+                self.get_logger().warn('amongus. Sent pixel_to_point request')
+                return True
+
+        self.get_logger().warn(f'amongus. No {target_color} pieces found on ground')
+        return False
+
+    def pixel_to_point_done_callback(self, future):
+        self.pixel_request_in_progress = False
+
+        try:
+            result = future.result()
+
+            if result is None:
+                self.get_logger().warn('amongus. PixelToPoint returned no result')
+                self.robot_busy = False
+                return
+
+            if not result.success:
+                self.get_logger().warn(
+                    f'amongus. PixelToPoint failed: {result.message}'
+                )
+                self.robot_busy = False
+                return
+
+            piece_position = Point()
+            piece_position.x = result.point.point.x
+            piece_position.y = result.point.point.y
+            piece_position.z = result.point.point.z
+
+            self.get_logger().warn(
+                f'amongus. Pixel converted to 3D: '
+                f'({piece_position.x:.3f}, {piece_position.y:.3f}, {piece_position.z:.3f})'
+            )
+
+            board_position = self.column_to_board_position(self.latest_move)
+
+            if board_position is None:
+                self.get_logger().warn('amongus. Could not compute board placement position')
+                self.robot_busy = False
+                return
+
+            self.call_robot_service(piece_position, board_position)
+
+        except Exception as e:
+            self.get_logger().error(f'amongus. Pixel service callback failed: {e}')
+            self.robot_busy = False
 
     def column_to_board_position(self, col):
-        """
-        Calculate the 3D position for dropping a piece into the specified column.
-        
-        Assumes we have board corners: tl (top-left), tr (top-right)
-        Interpolates along the top edge of the board for the column position.
-        """
-
         if self.tl is None or self.tr is None:
-            self.get_logger().error('Board corners not available for positioning')
+            self.get_logger().error('amongus. Board corners not available for positioning')
             return None
 
         p = Point()
 
-        # For 7 columns (0-6), there are 6 intervals
-        # Interpolate x position along the top edge from left to right
+        # Interpolate along top edge from TL to TR
         p.x = self.tl.x + col * (self.tr.x - self.tl.x) / 6.0
-        
-        # Interpolate y position along the top edge
         p.y = self.tl.y + col * (self.tr.y - self.tl.y) / 6.0
-        
-        # Add small offset downward for piece placement (adjust as needed)
+
+        # Small offset toward board/drop direction
         slot_spacing = 0.035
         p.y += slot_spacing
-        
-        p.z = 0.0  # Assume board is at z=0, adjust if needed
-        
-        self.get_logger().debug(f'Column {col} position: ({p.x:.3f}, {p.y:.3f}, {p.z:.3f})')
+
+        # Adjust this if your board localizer gives a better z
+        p.z = 0.0
+
+        self.get_logger().warn(
+            f'amongus. Board position for col {col}: '
+            f'({p.x:.3f}, {p.y:.3f}, {p.z:.3f})'
+        )
+
         return p
 
     def call_robot_service(self, piece_position, board_position):
         if not self.place_client.wait_for_service(timeout_sec=2.0):
-            self.get_logger().error('/run_piece_placement service not available')
+            self.get_logger().error('amongus. /run_piece_placement service not available')
+            self.robot_busy = False
             return
 
         req = RunPlacement.Request()
         req.piece_position = piece_position
         req.board_position = board_position
 
-        self.robot_busy = True
         self.waiting_for_solver = False
 
-        self.get_logger().info(
-            f'Calling robot service: '
+        self.get_logger().warn(
+            f'amongus. Calling robot service: '
             f'piece=({piece_position.x:.3f}, {piece_position.y:.3f}, {piece_position.z:.3f}), '
             f'board=({board_position.x:.3f}, {board_position.y:.3f}, {board_position.z:.3f})'
         )
@@ -292,13 +293,15 @@ class Connect4Main(Node):
         try:
             result = future.result()
 
-            if result.success:
-                self.get_logger().info(f'Robot placement started: {result.message}')
+            if result is None:
+                self.get_logger().error('amongus. Robot service returned no result')
+            elif result.success:
+                self.get_logger().warn(f'amongus. Robot placement started: {result.message}')
             else:
-                self.get_logger().error(f'Robot placement failed: {result.message}')
+                self.get_logger().error(f'amongus. Robot placement failed: {result.message}')
 
         except Exception as e:
-            self.get_logger().error(f'Robot service call failed: {e}')
+            self.get_logger().error(f'amongus. Robot service call failed: {e}')
 
         self.robot_busy = False
         self.latest_move = None

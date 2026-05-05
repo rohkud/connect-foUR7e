@@ -35,7 +35,7 @@ class ConstantTransformPublisher(Node):
             self.aruco_marker_callback,
             5,
         )
-        self.get_logger().info('Constant Transform Publisher initialized')
+        self.get_logger().debug('Constant Transform Publisher initialized')
         self.g_base_ar = np.array([[-1, 0, 0, 0],
                       [0, 0, 1, 0.16],
                       [0, 1, 0, -0.13],
@@ -75,7 +75,7 @@ class ConstantTransformPublisher(Node):
         return trans_inv, rot_inv
 
     def aruco_marker_callback(self, msg):
-        self.get_logger().info(f"Marker callback triggered with {len(msg.marker_ids)} markers")
+        self.get_logger().debug(f"Marker callback triggered with {len(msg.marker_ids)} markers")
         for i, marker_id in enumerate(msg.marker_ids):
             if marker_id == 7:
                 pose = msg.poses[i]
@@ -99,37 +99,6 @@ class ConstantTransformPublisher(Node):
                 t.transform.rotation.z = q[2]
                 t.transform.rotation.w = q[3]
                 self.br.sendTransform(t)
-
-        # tf = None
-        # source_frame = "camera1"
-        # target_frame = "ar_marker_6_camera"
-        # try:
-        #     tf = self.tf_buffer.lookup_transform(target_frame, source_frame, Time())
-        # except TransformException as ex:
-        #     self.get_logger().warn(f'Could not transform {source_frame} to {target_frame}: {ex}')
-        #     return
-
-        # g_tag_camera = self.tf_matrix(tf)
-
-        # source_frame = "ar_marker_6"
-        # target_frame = "base_link"
-        # try:
-        #     tf = self.tf_buffer.lookup_transform(target_frame, source_frame, Time())
-        # except TransformException as ex:
-        #     self.get_logger().warn(f'Could not transform {source_frame} to {target_frame}: {ex}')
-        #     return
-    
-        # g_base_tag = self.tf_matrix(tf)
-        # g = g_base_tag @ g_tag_camera
-        # x, y, z = g[0, 3], g[1, 3], g[2, 3]
-        # point = PointStamped()
-        # point.header.stamp = self.get_clock().now().to_msg()
-        # point.header.frame_id = 'camera1'
-        # point.point.x = x
-        # point.point.y = y
-        # point.point.z = z
-        # self.camera_pose_pub.publish(point)
-        # self.get_logger().info(f'Published camera pose: x={x:.3f}, y={y:.3f}, z={z:.3f}')
 
 def main():
     rclpy.init()

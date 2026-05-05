@@ -81,7 +81,7 @@ class GameStateNode(Node):
             5
         )
 
-        self.get_logger().info('Game state node started')
+        self.get_logger().debug('Game state node started')
 
     def board_callback(self, msg):
         current_corners = list(zip(msg.corner_x, msg.corner_y))
@@ -96,16 +96,16 @@ class GameStateNode(Node):
         self.last_board = current_corners
         self.board = msg
         # Compute homography from board corners to canonical 6x7 board
-        self.get_logger().info('Received board corners, computing homography...')
+        self.get_logger().debug('Received board corners, computing homography...')
         if len(msg.corner_x) == 4 and len(msg.corner_y) == 4:
             src_points = np.array([[msg.corner_x[i], msg.corner_y[i]] for i in range(4)], dtype=np.float32)
             # Assuming order: TL, TR, BR, BL
             dst_points = np.array([[0, 0], [700, 0], [700, 600], [0, 600]], dtype=np.float32)
             self.homography = cv2.getPerspectiveTransform(src_points, dst_points)
-            self.get_logger().info('Computed homography from board corners')
+            self.get_logger().debug('Computed homography from board corners')
         else:
             self.homography = None
-            self.get_logger().warn('Invalid board corners, homography not computed')
+            self.get_logger().debug('Invalid board corners, homography not computed')
         self.update_game_state()
 
     def disc_callback(self, msg):
@@ -116,7 +116,7 @@ class GameStateNode(Node):
         try:
             self.latest_image = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
         except Exception as e:
-            self.get_logger().error(f"Failed to convert image: {e}")
+            self.get_logger().debug(f"Failed to convert image: {e}")
         self.update_game_state()
 
     def update_game_state(self):
@@ -136,7 +136,7 @@ class GameStateNode(Node):
 
             # Check if within canonical board bounds
             if tx < 0 or tx >= 700 or ty < 0 or ty >= 600:
-                self.get_logger().warn(f"Transformed point out of bounds: (tx, ty)=({tx:.1f}, {ty:.1f})")
+                self.get_logger().debug(f"Transformed point out of bounds: (tx, ty)=({tx:.1f}, {ty:.1f})")
                 continue
 
             # Compute grid indices (cell size 100)
@@ -166,7 +166,7 @@ class GameStateNode(Node):
         board_array = board_array[::-1]
 
         # Print board nicely
-        self.get_logger().info(f"\nCurrent board state:\n{np.array(board_array)}")
+        self.get_logger().debug(f"\nCurrent board state:\n{np.array(board_array)}")
 
         # Publish as Int8MultiArray
         msg = Int8MultiArray()
@@ -201,7 +201,7 @@ class GameStateNode(Node):
                 self.warped_image_pub.publish(warped_msg)
                 self.get_logger().debug('Published warped image for debugging')
             except Exception as e:
-                self.get_logger().error(f"Failed to warp and publish image: {e}")
+                self.get_logger().debug(f"Failed to warp and publish image: {e}")
 
     def apply_homography(self, H, x, y):
         point = np.array([x, y, 1.0], dtype=np.float32)

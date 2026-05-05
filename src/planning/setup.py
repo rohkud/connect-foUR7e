@@ -23,6 +23,7 @@ setup(
     entry_points={
         'console_scripts': [
             'main = planning.main:main',
+            'debug = planning.debug:main',
             'static_tf = planning.static_tf_transform:main',
             'camera_tf = planning.camera_tf_transform:main',
             'ik = planning.ik:main',

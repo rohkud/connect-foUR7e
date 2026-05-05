@@ -91,6 +91,13 @@ def generate_launch_description():
             output='screen'
         ),
 
+        Node(
+            package='planning',
+            executable='main',
+            name='planning_main',
+            output='screen'
+        ),
+
         # --- MoveIt ---
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(

@@ -69,6 +69,12 @@ class GamePlanner(Node):
             '/game_solver/board',
             5
         )
+
+        self.stable_board_pub = self.create_publisher(
+            Int8MultiArray,
+            '/game_planner/stable_board',
+            5
+        )
         
         # Subscribe to solver solution
         self.solution_sub = self.create_subscription(
@@ -90,10 +96,25 @@ class GamePlanner(Node):
             self.solve_interval,
             self.timer_callback
         )
+
+        self.stable_board_timer = self.create_timer(
+            1.0,
+            self.stable_board_callback
+        )
         
         self.get_logger().info(f'Game planner started for {self.player_color}')
         self.get_logger().info(f'Solve interval: {self.solve_interval}s, alpha: {self.alpha}')
         self.latest_solution = None
+
+    def stable_board_callback(self):
+        """Publish the current stable board state for visualization."""
+        if self.observation_count == 0:
+            return
+        
+        stable_board = self.get_deterministic_board()
+        stable_msg = Int8MultiArray()
+        stable_msg.data = stable_board
+        self.stable_board_pub.publish(stable_msg)
 
     def board_callback(self, msg):
         """Receive board state from game_state and update probabilistic state."""

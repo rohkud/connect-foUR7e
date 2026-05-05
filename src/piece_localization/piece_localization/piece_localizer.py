@@ -13,6 +13,7 @@ import numpy as np
 from scipy.spatial.transform import Rotation as R
 
 from piece_localization_interfaces.srv import PixelToPoint
+import sympy as sp
 
 
 class PixelToPointService(Node):
@@ -92,47 +93,35 @@ class PixelToPointService(Node):
     def undistort_point(self, u, v):
         return self.cam_model.rectifyPoint((u, v))
 
-    def project_pixel_to_table(self, u, v):
-        if not self.cam_info_ready:
-            raise RuntimeError('CameraInfo not received yet')
+    def depth_estimation(self, u, v):
+            d = sp.symbols('d')
+            point = sp.Matrix(np.array([u, v, 1.0]))
+            ray = self.K_inv @ point
+            depth_ray = d * ray
 
-        u_rect, v_rect = self.undistort_point(u, v)
+            tf = None
+            source_frame = "camera1"
+            target_frame = "base_link"
+            try:
+                tf = self.tf_buffer.lookup_transform(target_frame, source_frame, Time())
+            except TransformException as ex:
+                self.get_logger().debug(f'Could not transform {source_frame} to {target_frame}: {ex}')
+                return
+            g = sp.Matrix(self.tf_matrix(tf))
+            self.g = g
 
-        pixel = np.array([u_rect, v_rect, 1.0])
-        ray_camera = self.K_inv @ pixel
+            point_base = g * sp.Matrix([depth_ray[0], depth_ray[1], depth_ray[2], 1])
+            point_base_z = point_base[2]
 
-        try:
-            tf = self.tf_buffer.lookup_transform(
-                self.target_frame,
-                self.camera_frame,
-                Time()
-            )
-        except TransformException as ex:
-            raise RuntimeError(
-                f'Could not transform {self.camera_frame} to {self.target_frame}: {ex}'
-            )
+            depth = sp.solve(sp.Eq(point_base_z, self.table_z), d)
+            
+            point_base_3d = point_base.subs(d, depth[0])
 
-        T_base_camera = self.tf_matrix(tf)
-
-        R_base_camera = T_base_camera[:3, :3]
-        camera_origin_base = T_base_camera[:3, 3]
-        ray_base = R_base_camera @ ray_camera
-
-        if abs(ray_base[2]) < 1e-6:
-            raise RuntimeError('Ray is parallel to table plane')
-
-        d = (self.table_z - camera_origin_base[2]) / ray_base[2]
-
-        if d <= 0:
-            raise RuntimeError('Intersection is behind camera')
-
-        point_base = camera_origin_base + d * ray_base
-
-        return point_base
+            return point_base_3d
 
     def pixel_to_point_callback(self, request, response):
         try:
-            point_3d = self.project_pixel_to_table(request.u, request.v)
+            point_3d = self.depth_estimation(request.u, request.v)
 
             msg = PointStamped()
             msg.header.frame_id = self.target_frame

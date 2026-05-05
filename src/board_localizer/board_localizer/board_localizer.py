@@ -96,7 +96,7 @@ class BoardLocalizer(Node):
             try:
                 tf = self.tf_buffer.lookup_transform(target_frame, source_frame, Time())
             except TransformException as ex:
-                self.get_logger().warn(f'Could not transform {source_frame} to {target_frame}: {ex}')
+                self.get_logger().debug(f'Could not transform {source_frame} to {target_frame}: {ex}')
                 return
             g = sp.Matrix(self.tf_matrix(tf))
             self.g = g
@@ -119,7 +119,7 @@ class BoardLocalizer(Node):
 
         point_3d = self.depth_estimation(u_rect, v_rect)
         if point_3d is None:
-            self.get_logger().warn(f'Failed to estimate depth for {name} corner')
+            self.get_logger().debug(f'Failed to estimate depth for {name} corner')
             return
         x, y, z = point_3d[0], point_3d[1], point_3d[2]
         point = PointStamped()
@@ -136,7 +136,7 @@ class BoardLocalizer(Node):
 
     def board_callback(self, msg: GameBoard):
         if len(msg.corner_x) != 4 or len(msg.corner_y) != 4:
-            self.get_logger().warn('Invalid board corner message, expected 4 corners')
+            self.get_logger().debug('Invalid board corner message, expected 4 corners')
             return
 
         tl_u = msg.corner_x[0]
