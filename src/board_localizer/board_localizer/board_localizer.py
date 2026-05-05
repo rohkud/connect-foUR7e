@@ -46,7 +46,7 @@ class BoardLocalizer(Node):
 
         self.cam_model = PinholeCameraModel()
 
-        self.get_logger().info(f'Board Localizer initialized with board_z={self.board_z}')
+        self.get_logger().debug(f'Board Localizer initialized with board_z={self.board_z}')
 
     def camera_info_callback(self, msg: CameraInfo):
         self.cam_model.fromCameraInfo(msg)
@@ -55,7 +55,7 @@ class BoardLocalizer(Node):
         self.camera_frame = msg.header.frame_id or self.camera_frame
         self.cam_info_ready = True
 
-        self.get_logger().info(
+        self.get_logger().debug(
             f'Received camera intrinsics. frame={self.camera_frame}, K=\n{self.K}'
         )
 
@@ -143,7 +143,7 @@ class BoardLocalizer(Node):
         point.point.z = float(z)
 
         publisher.publish(point)
-        self.get_logger().info(
+        self.get_logger().debug(
             f'Published {name} corner 3D position: x={x:.4f}, y={y:.4f}, z={z:.4f}'
         )
 

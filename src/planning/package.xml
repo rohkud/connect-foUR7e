@@ -7,6 +7,11 @@
   <maintainer email="danielmunicio360@gmail.com">ee106a-tah</maintainer>
   <license>TODO: License declaration</license>
 
+  <depend>std_msgs</depend>
+  <depend>geometry_msgs</depend>
+  <depend>rclpy</depend>
+  <depend>planning_interfaces</depend>
+
   <test_depend>ament_copyright</test_depend>
   <test_depend>ament_flake8</test_depend>
   <test_depend>ament_pep257</test_depend>

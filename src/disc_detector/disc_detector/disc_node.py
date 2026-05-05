@@ -116,7 +116,7 @@ class DiscDetector(Node):
         self.disc_data_pub.publish(disc_data_msg)
 
     def image_callback_color(self, msg, color):
-        self.get_logger().info("Image received")
+        self.get_logger().debug("Image received")
         try:
             cv_image = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
         except Exception as e:
@@ -177,7 +177,7 @@ class DiscDetector(Node):
 
         # Find contours
         contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        self.get_logger().info(f"Found {len(contours)} contours")
+        self.get_logger().debug(f"Found {len(contours)} contours")
 
         if contours:
             points_published = 0
@@ -206,7 +206,7 @@ class DiscDetector(Node):
                 candidate_points.append(point)
                 points_published += 1
 
-                self.get_logger().info(
+                self.get_logger().debug(
                     f"Disc candidate at ({cx}, {cy}) with circularity {circularity:.2f}")
                 
             if points_published > 0:
@@ -218,7 +218,7 @@ class DiscDetector(Node):
                     self.yellow_image_pub.publish(img_msg)
 
             else:
-                self.get_logger().info("No circular disc candidates above threshold were published")
+                self.get_logger().debug("No circular disc candidates above threshold were published")
             
             return candidate_points
         return []

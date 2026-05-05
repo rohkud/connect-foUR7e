@@ -21,6 +21,7 @@ setup(
     entry_points={
         'console_scripts': [
             'game_planner = game_planner.game_planner_node:main',
+            'main = game_planner.main:main'
         ],
     },
 )

@@ -1,38 +1,40 @@
+#!/usr/bin/env python3
+
 import rclpy
 from rclpy.node import Node
 
-from game_msgs.msg import DiscLoc2d, GameBoard
-from ros2_aruco_interfaces.msg import ArucoMarkers
-
-from geometry_msgs.msg import PointStamped
 from sensor_msgs.msg import CameraInfo
-
-import numpy as np
-import cv2
-import sympy as sp
-from scipy.spatial.transform import Rotation as R
+from geometry_msgs.msg import PointStamped
 from tf2_ros import Buffer, TransformListener, TransformException
 from rclpy.time import Time
 from image_geometry import PinholeCameraModel
 
-class PieceLocalizer(Node):
+import numpy as np
+from scipy.spatial.transform import Rotation as R
+
+from piece_localization_interfaces.srv import PixelToPoint
+
+
+class PixelToPointService(Node):
     def __init__(self):
-        super().__init__('piece_localizer')
+        super().__init__('pixel_to_point_service')
 
-        self.declare_parameter('table_marker_id', 12)
+        self.declare_parameter('camera_frame', 'camera1')
+        self.declare_parameter('target_frame', 'base_link')
+        self.declare_parameter('table_z', -0.28)
 
-        self.table_marker_id = (
-            self.get_parameter('table_marker_id')
-            .get_parameter_value()
-            .integer_value
-        )
+        self.camera_frame = self.get_parameter('camera_frame').value
+        self.target_frame = self.get_parameter('target_frame').value
+        self.table_z = self.get_parameter('table_z').value
 
-        self.disc_sub = self.create_subscription(
-            DiscLoc2d,
-            '/disc_data',
-            self.disc_callback,
-            10
-        )
+        self.K = None
+        self.K_inv = None
+        self.cam_info_ready = False
+
+        self.cam_model = PinholeCameraModel()
+
+        self.tf_buffer = Buffer()
+        self.tf_listener = TransformListener(self.tf_buffer, self)
 
         self.camera_info_sub = self.create_subscription(
             CameraInfo,
@@ -41,213 +43,128 @@ class PieceLocalizer(Node):
             10
         )
 
-        self.board_sub = self.create_subscription(
-            GameBoard,
-            '/board_data',
-            self.board_callback,
-            10
-        )
-
         self.localized_pub = self.create_publisher(
             PointStamped,
-            '/localized_pieces',
+            '/localized_pixel_3d',
             10
         )
 
-        self.camera_pose_pub = self.create_publisher(PointStamped, 'camera_pose', 10)
+        self.service = self.create_service(
+            PixelToPoint,
+            '/pixel_to_point',
+            self.pixel_to_point_callback
+        )
 
-
-        self.K = None
-        self.K_inv = None
-        self.sympy_K_inv = None
-        self.homography = None
-        self.table_z = -0.28
-        self.g = None
-        self.cam_info_ready = False
-
-        self.tf_buffer = Buffer()
-        self.tf_listener = TransformListener(self.tf_buffer, self)
-
-        self.cam_model = PinholeCameraModel()
-
-        self.get_logger().info('Piece Localizer initialized')
-
-    def undistort_point(self, u, v):
-        if not self.cam_info_ready:
-            raise RuntimeError("CameraInfo not received yet")
-
-        return self.cam_model.rectifyPoint((u, v))
+        self.get_logger().debug('Pixel-to-3D service ready on /pixel_to_point')
 
     def camera_info_callback(self, msg: CameraInfo):
         self.cam_model.fromCameraInfo(msg)
         self.K = np.array(msg.k).reshape(3, 3)
         self.K_inv = np.linalg.inv(self.K)
-        self.sympy_K_inv = sp.Matrix(self.K_inv)
 
-        self.get_logger().info(f'Received camera intrinsics:\n{self.K}')
+        if msg.header.frame_id:
+            self.camera_frame = msg.header.frame_id
+
         self.cam_info_ready = True
 
-        if self.g is not None:
-            self.publish_camera_pose()
-
-    def publish_camera_pose(self):
-        if self.g is None:
-            return
-
-        camera_point = PointStamped()
-        camera_point.header.frame_id = 'base_link'
-        camera_point.header.stamp = self.get_clock().now().to_msg()
-        camera_point.point.x = float(self.g[0, 3])
-        camera_point.point.y = float(self.g[1, 3])
-        camera_point.point.z = float(self.g[2, 3])
-        self.camera_pose_pub.publish(camera_point)
-        self.get_logger().info(
-            f'Published camera pose in base_link: '
-            f'x={camera_point.point.x:.3f}, '
-            f'y={camera_point.point.y:.3f}, '
-            f'z={camera_point.point.z:.3f}'
-        )
-
     def tf_matrix(self, tf):
-        # Convert geometry_msgs/Transform to 4x4 homogeneous transformation matrix
-        translation = (tf.transform.translation.x,
-                       tf.transform.translation.y,
-                       tf.transform.translation.z)
-        rotation_quat = (tf.transform.rotation.x,
-                         tf.transform.rotation.y,
-                         tf.transform.rotation.z,
-                         tf.transform.rotation.w)
-        # Convert quaternion to rotation matrix using scipy
-        rot = R.from_quat(rotation_quat)
-        rot_matrix = rot.as_matrix()
-        
-        # Create 4x4 homogeneous matrix
+        translation = np.array([
+            tf.transform.translation.x,
+            tf.transform.translation.y,
+            tf.transform.translation.z
+        ])
+
+        quat = [
+            tf.transform.rotation.x,
+            tf.transform.rotation.y,
+            tf.transform.rotation.z,
+            tf.transform.rotation.w
+        ]
+
+        rot = R.from_quat(quat).as_matrix()
+
         T = np.eye(4)
-        T[0:3, 0:3] = rot_matrix
-        T[0:3, 3] = translation
+        T[:3, :3] = rot
+        T[:3, 3] = translation
+
         return T
 
-    def depth_estimation(self, u, v):
-        d = sp.symbols('d')
-        point = sp.Matrix(np.array([u, v, 1.0]))
-        ray = self.K_inv @ point
-        depth_ray = d * ray
+    def undistort_point(self, u, v):
+        return self.cam_model.rectifyPoint((u, v))
 
-        tf = None
-        source_frame = "camera1"
-        target_frame = "base_link"
+    def project_pixel_to_table(self, u, v):
+        if not self.cam_info_ready:
+            raise RuntimeError('CameraInfo not received yet')
+
+        u_rect, v_rect = self.undistort_point(u, v)
+
+        pixel = np.array([u_rect, v_rect, 1.0])
+        ray_camera = self.K_inv @ pixel
+
         try:
-            tf = self.tf_buffer.lookup_transform(target_frame, source_frame, Time())
+            tf = self.tf_buffer.lookup_transform(
+                self.target_frame,
+                self.camera_frame,
+                Time()
+            )
         except TransformException as ex:
-            self.get_logger().warn(f'Could not transform {source_frame} to {target_frame}: {ex}')
-            return
-        
-        g = sp.Matrix(self.tf_matrix(tf))
-
-        # g_tag_camera = sp.Matrix(self.tf_matrix(tf))
-
-        # source_frame = f"ar_marker_7"
-        # target_frame = "base_link"
-        # try:
-        #     tf = self.tf_buffer.lookup_transform(target_frame, source_frame, Time())
-        # except TransformException as ex:
-        #     self.get_logger().warn(f'Could not transform {source_frame} to {target_frame}: {ex}')
-        #     return
-        
-        # g_base_tag = sp.Matrix(self.tf_matrix(tf))
-        # g = g_base_tag * g_tag_camera
-
-        self.g = g
-        self.publish_camera_pose()
-
-        point_base = g * sp.Matrix([depth_ray[0], depth_ray[1], depth_ray[2], 1])
-        point_base_z = point_base[2]
-
-        depth = sp.solve(sp.Eq(point_base_z, self.table_z), d)
-        
-        point_base_3d = point_base.subs(d, depth[0])
-
-        return point_base_3d
-
-    def board_callback(self, msg: GameBoard):
-        if len(msg.corner_x) == 4 and len(msg.corner_y) == 4:
-            src_points = np.array(
-                [self.undistort_point(msg.corner_x[i], msg.corner_y[i]) for i in range(4)],
-                dtype=np.float32
+            raise RuntimeError(
+                f'Could not transform {self.camera_frame} to {self.target_frame}: {ex}'
             )
 
-            # Assuming order: TL, TR, BR, BL
-            dst_points = np.array(
-                [[0, 0], [700, 0], [700, 600], [0, 600]],
-                dtype=np.float32
+        T_base_camera = self.tf_matrix(tf)
+
+        R_base_camera = T_base_camera[:3, :3]
+        camera_origin_base = T_base_camera[:3, 3]
+        ray_base = R_base_camera @ ray_camera
+
+        if abs(ray_base[2]) < 1e-6:
+            raise RuntimeError('Ray is parallel to table plane')
+
+        d = (self.table_z - camera_origin_base[2]) / ray_base[2]
+
+        if d <= 0:
+            raise RuntimeError('Intersection is behind camera')
+
+        point_base = camera_origin_base + d * ray_base
+
+        return point_base
+
+    def pixel_to_point_callback(self, request, response):
+        try:
+            point_3d = self.project_pixel_to_table(request.u, request.v)
+
+            msg = PointStamped()
+            msg.header.frame_id = self.target_frame
+            msg.header.stamp = self.get_clock().now().to_msg()
+            msg.point.x = float(point_3d[0])
+            msg.point.y = float(point_3d[1])
+            msg.point.z = float(point_3d[2])
+
+            self.localized_pub.publish(msg)
+
+            response.success = True
+            response.message = 'Projected pixel to 3D table point'
+            response.point = msg
+
+            self.get_logger().debug(
+                f'Pixel ({request.u:.1f}, {request.v:.1f}) -> '
+                f'3D ({msg.point.x:.3f}, {msg.point.y:.3f}, {msg.point.z:.3f})'
             )
 
-            self.homography = cv2.getPerspectiveTransform(src_points, dst_points)
-            self.get_logger().info('Computed homography from board corners')
-        else:
-            self.homography = None
-            self.get_logger().warn('Invalid board corners, homography not computed')
+        except Exception as e:
+            response.success = False
+            response.message = str(e)
+            response.point = PointStamped()
 
-    def apply_homography(self, H, x, y):
-        point = np.array([x, y, 1.0], dtype=np.float32)
-        warped = H.dot(point)
+            self.get_logger().warn(response.message)
 
-        if warped[2] == 0:
-            return None
-
-        return float(warped[0] / warped[2]), float(warped[1] / warped[2])
-
-    def disc_callback(self, msg: DiscLoc2d):
-        if self.K is None:
-            self.get_logger().warn('Camera intrinsics not received yet')
-            return
-
-        if self.homography is None:
-            self.get_logger().warn('Board homography not received yet')
-            return
-
-        for i, (x, y, color) in enumerate(zip(msg.x, msg.y, msg.color)):
-            x, y = self.undistort_point(x, y)
-            transformed = self.apply_homography(self.homography, x, y)
-
-            if transformed is None:
-                continue
-
-            tx, ty = transformed
-
-            inside_board = (0 <= tx < 700) and (0 <= ty < 600)
-            # We only want loose pieces outside the board
-            if inside_board:
-                self.get_logger().info(
-                    f'Skipping disc {i}: inside board at ({tx:.1f}, {ty:.1f})'
-                )
-                continue
-
-            point_3d = self.depth_estimation(x, y)
-
-            if point_3d is None:
-                self.get_logger().warn(f'Could not project disc {i} to table plane')
-                continue
-
-            localized_point = PointStamped()
-            localized_point.header.frame_id = 'base_link'
-            localized_point.header.stamp = self.get_clock().now().to_msg()
-
-            localized_point.point.x = float(point_3d[0])
-            localized_point.point.y = float(point_3d[1])
-            localized_point.point.z = float(point_3d[2])
-
-            self.localized_pub.publish(localized_point)
-
-            self.get_logger().info(
-                f'Localized {color} disc at camera frame: '
-                f'x={point_3d[0]:.3f}, y={point_3d[1]:.3f}, z={point_3d[2]:.3f}'
-            )
+        return response
 
 
 def main(args=None):
     rclpy.init(args=args)
-    node = PieceLocalizer()
+    node = PixelToPointService()
     rclpy.spin(node)
     node.destroy_node()
     rclpy.shutdown()

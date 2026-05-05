@@ -14,7 +14,7 @@ from sensor_msgs.msg import JointState
 from scipy.spatial.transform import Rotation as R
 
 from planning.ik import IKPlanner
-from planning.srv import RunPlacement
+from planning_interfaces.srv import RunPlacement
 
 
 class UR7e_CubeGrasp(Node):

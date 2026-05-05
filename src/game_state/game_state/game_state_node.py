@@ -25,6 +25,8 @@ import rclpy
 from rclpy.node import Node
 from std_msgs.msg import Int8MultiArray, MultiArrayDimension
 from game_msgs.msg import GameBoard, DiscLoc2d
+from sensor_msgs.msg import Image
+from cv_bridge import CvBridge
 import numpy as np
 import cv2
 
@@ -33,10 +35,12 @@ class GameStateNode(Node):
     def __init__(self):
         super().__init__('game_state')
 
+        self.bridge = CvBridge()
         self.board = None
         self.last_board = None
         self.disc_data = None
         self.homography = None
+        self.latest_image = None
 
         self.board_sub = self.create_subscription(
             GameBoard,
@@ -52,9 +56,24 @@ class GameStateNode(Node):
             5,
         )
 
+        # Subscribe to camera image for debugging
+        self.image_sub = self.create_subscription(
+            Image,
+            '/camera1/image_raw',
+            self.image_callback,
+            5,
+        )
+
         self.board_pub = self.create_publisher(
             Int8MultiArray,
             '/game_state/board',
+            5
+        )
+
+        # Debug publisher for warped image
+        self.warped_image_pub = self.create_publisher(
+            Image,
+            '/game_state/warped_image',
             5
         )
 
@@ -65,6 +84,9 @@ class GameStateNode(Node):
 
         # Skip if same as last message
         if self.last_board == current_corners:
+            return
+        
+        if self.last_board:
             return
 
         self.last_board = current_corners
@@ -84,6 +106,13 @@ class GameStateNode(Node):
 
     def disc_callback(self, msg):
         self.disc_data = msg
+        self.update_game_state()
+
+    def image_callback(self, msg):
+        try:
+            self.latest_image = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
+        except Exception as e:
+            self.get_logger().error(f"Failed to convert image: {e}")
         self.update_game_state()
 
     def update_game_state(self):
@@ -148,7 +177,27 @@ class GameStateNode(Node):
         msg.data = [int(cell) for row in board_array for cell in row]
 
         self.board_pub.publish(msg)
-        self.get_logger().info('Published game state board')
+        self.get_logger().debug('Published game state board')
+
+        # Publish warped image for debugging
+        if self.latest_image is not None and self.homography is not None:
+            try:
+                # Warp the image using the homography
+                warped_image = cv2.warpPerspective(
+                    self.latest_image, 
+                    self.homography, 
+                    (700, 600)  # Canonical board size
+                )
+                
+                # Convert back to ROS Image message
+                warped_msg = self.bridge.cv2_to_imgmsg(warped_image, encoding='bgr8')
+                warped_msg.header.stamp = self.get_clock().now().to_msg()
+                warped_msg.header.frame_id = 'board_canonical'
+                
+                self.warped_image_pub.publish(warped_msg)
+                self.get_logger().debug('Published warped image for debugging')
+            except Exception as e:
+                self.get_logger().error(f"Failed to warp and publish image: {e}")
 
     def apply_homography(self, H, x, y):
         point = np.array([x, y, 1.0], dtype=np.float32)

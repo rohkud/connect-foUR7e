@@ -29,18 +29,19 @@ def generate_launch_description():
             name='disc_detector',
             output='screen'
         ),
-
-        Node(
-            package='piece_localization',
-            executable='piece_localizer',
-            name='piece_localization',
-            output='screen'
-        ),
         
         Node(
             package='board_localizer',
             executable='board_localizer',
             name='board_localizer',
+            output='screen'
+        ),
+
+        # --- Pixel → 3D Service ---
+        Node(
+            package='piece_localization',
+            executable='piece_localizer',
+            name='piece_localization',
             output='screen'
         ),
 
@@ -91,9 +92,9 @@ def generate_launch_description():
 
         # --- Control / Execution ---
         Node(
-            package='planning',
-            executable='cube_grasp_service',
-            name='cube_grasp_service',
+            package='game_planner',
+            executable='main',
+            name='game_planner_main',
             output='screen'
         ),
 
