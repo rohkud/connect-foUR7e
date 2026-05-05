@@ -42,19 +42,12 @@ INTEGRATION:
 """
 
 import cv2
-import numpy as np
-import json
-import os
-from pathlib import Path
-import sys
-sys.path.insert(0, str(Path(__file__).parent))
 
 # Import rclpy here for ROS2 camera feed
 import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import Image
 from cv_bridge import CvBridge
-from ament_index_python.packages import get_package_share_directory
 from game_msgs.msg import GameBoard
 
 

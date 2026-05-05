@@ -185,8 +185,6 @@ class Connect4Main(Node):
             self.get_logger().warn('Could not compute board placement position')
             return
         
-        self.eror
-
         self.call_robot_service(piece_position, board_position)
 
     def choose_ground_piece(self):
