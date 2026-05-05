@@ -17,12 +17,12 @@ def generate_launch_description():
 
         # --- Perception ---
         Node(
-            package='board_detector',
-            executable='board_node',
-            name='board_detector',
+            package='disc_detector',
+            executable='disc_node',
+            name='disc_detector',
             output='screen'
         ),
-
+        
         Node(
             package='board_localizer',
             executable='board_localizer',
