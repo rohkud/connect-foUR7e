@@ -51,15 +51,15 @@ def generate_launch_description():
         # --- Game Logic ---
         Node(
             package='game_state',
-            executable='game_state_node',
-            name='game_state',
+            executable='board_state',
+            name='board_state',
             output='screen'
         ),
 
         Node(
-            package='game_solver',
-            executable='game_solver_node',
-            name='game_solver',
+            package='game_state',
+            executable='solver',
+            name='solver_node',
             output='screen'
         ),
 

@@ -19,7 +19,8 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'game_state_node = game_state.game_state_node:main',
+            f'board_state = {package_name}.board_state:main',
+            f'solver = {package_name}.solver:main'
         ],
     },
 )

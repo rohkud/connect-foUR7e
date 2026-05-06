@@ -35,9 +35,9 @@ import os
 import time
 
 
-class GameStateNode(Node):
+class BoardStateNode(Node):
     def __init__(self):
-        super().__init__('game_state')
+        super().__init__('board_state')
 
         self.bridge = CvBridge()
         self.board = None
@@ -213,7 +213,7 @@ class GameStateNode(Node):
 
 def main(args=None):
     rclpy.init(args=args)
-    node = GameStateNode()
+    node = BoardStateNode()
     rclpy.spin(node)
     node.destroy_node()
     rclpy.shutdown()
