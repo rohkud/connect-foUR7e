@@ -20,7 +20,8 @@ setup(
     entry_points={
         'console_scripts': [
             f'board_state = {package_name}.board_state:main',
-            f'solver = {package_name}.solver:main'
+            f'solver = {package_name}.solver:main',
+            f'localizer = {package_name}.localizer:main',
         ],
     },
 )

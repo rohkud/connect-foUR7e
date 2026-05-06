@@ -32,19 +32,12 @@ def generate_launch_description():
             name='disc_detector',
             output='screen'
         ),
-        
-        Node(
-            package='board_localizer',
-            executable='board_localizer',
-            name='board_localizer',
-            output='screen'
-        ),
 
         # --- Pixel → 3D Service ---
         Node(
-            package='piece_localization',
-            executable='piece_localizer',
-            name='piece_localization',
+            package='game_state',
+            executable='localizer',
+            name='localization_service',
             output='screen'
         ),
 

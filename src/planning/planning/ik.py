@@ -98,6 +98,27 @@ class IKPlanner(Node):
     # Plan motion given a desired joint configuration
     # -----------------------------------------------------------
     def plan_to_joints(self, start_joint_state, target_joint_state):
+
+        if start_joint_state is None:
+            self.get_logger().error("start_joint_state is None")
+            return None
+
+        if len(start_joint_state.name) == 0:
+            self.get_logger().error("start_joint_state has empty names")
+            return None
+
+        if len(start_joint_state.position) == 0:
+            self.get_logger().error("start_joint_state has empty positions")
+            return None
+
+        if len(start_joint_state.name) != len(start_joint_state.position):
+            self.get_logger().error("start_joint_state mismatch")
+            return None
+
+        if target_joint_state is None:
+            self.get_logger().error("target_joint_state is None")
+            return None
+            
         req = GetMotionPlan.Request()
         req.motion_plan_request.group_name = 'ur_manipulator'
         req.motion_plan_request.allowed_planning_time = 5.0
@@ -117,6 +138,7 @@ class IKPlanner(Node):
             )
 
         req.motion_plan_request.goal_constraints.append(goal_constraints)
+
         future = self.plan_client.call_async(req)
         rclpy.spin_until_future_complete(self, future)
 
@@ -126,7 +148,9 @@ class IKPlanner(Node):
 
         result = future.result()
         if result.motion_plan_response.error_code.val != 1:
-            self.get_logger().error('Planning failed.')
+            self.get_logger().error(
+                f'Planning failed, code: {result.motion_plan_response.error_code.val}'
+            )
             return None
 
         self.get_logger().info('Motion plan computed successfully.')
