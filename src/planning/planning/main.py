@@ -1,5 +1,6 @@
 from std_srvs.srv import Trigger
 import rclpy
+from std_msgs.msg import Bool
 from rclpy.node import Node
 from rclpy.action import ActionClient
 from control_msgs.action import FollowJointTrajectory
@@ -34,6 +35,12 @@ class UR7e_CubeGrasp(Node):
             RunPlacement,
             '/run_piece_placement',
             self.run_piece_placement_callback
+        )
+
+        self.robot_done_pub = self.create_publisher(
+            Bool,
+            '/robot_done',
+            10
         )
 
         self.joint_state = None
@@ -216,6 +223,12 @@ class UR7e_CubeGrasp(Node):
         if not self.job_queue:
             self.get_logger().info("All jobs completed.")
             self.running = False
+
+            done_msg = Bool()
+            done_msg.data = True
+            self.robot_done_pub.publish(done_msg)
+
+            self.get_logger().warn("Published /robot_done = True")
             return
 
         self.get_logger().info(

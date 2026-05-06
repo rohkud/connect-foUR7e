@@ -1,0 +1,6 @@
+int8[] board
+int8 player
+---
+bool success
+int8 column
+string message

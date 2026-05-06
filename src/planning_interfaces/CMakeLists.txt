@@ -12,6 +12,7 @@ find_package(geometry_msgs REQUIRED)
 
 rosidl_generate_interfaces(${PROJECT_NAME}
   "srv/RunPlacement.srv"
+  "srv/SolveMove.srv"
   DEPENDENCIES geometry_msgs
 )
 
