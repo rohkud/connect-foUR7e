@@ -70,14 +70,6 @@ def generate_launch_description():
             output='screen'
         ),
 
-        # --- Transforms ---
-        # Node(
-        #     package='planning',
-        #     executable='static_tf',
-        #     name='static_tf',
-        #     output='screen'
-        # ),
-
         Node(
             package='connect4_launch',
             executable='aruco_node',
@@ -91,14 +83,6 @@ def generate_launch_description():
             name='camera_tf',
             output='screen',
             parameters=[camera_tf_params]
-        ),
-
-        # --- IK Solver ---
-        Node(
-            package='planning',
-            executable='ik',
-            name='ik',
-            output='screen'
         ),
 
         # --- Control / Execution ---
@@ -116,18 +100,4 @@ def generate_launch_description():
             output='screen'
         ),
 
-        # --- MoveIt ---
-        IncludeLaunchDescription(
-            PythonLaunchDescriptionSource(
-                os.path.join(
-                    get_package_share_directory("ur_moveit_config"),
-                    "launch",
-                    "ur_moveit.launch.py"
-                )
-            ),
-            launch_arguments={
-                "ur_type": ur_type,
-                "launch_rviz": launch_rviz
-            }.items(),
-        ),
     ])

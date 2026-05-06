@@ -1,16 +1,3 @@
-"""
-================================================================================
-Main Planning & Control Node (main.py)
-================================================================================
-
-PURPOSE:
-    Orchestrates robot manipulation for Connect Four disc placement. Converts
-    high-level game moves (column index) into physical robot actions via
-    inverse kinematics and motion planning. Implements a job queue for
-    sequential execution of grasp, move, and release actions.
-================================================================================
-"""
-
 # ROS Libraries
 from std_srvs.srv import Trigger
 import sys
@@ -37,20 +24,9 @@ class UR7e_CubeGrasp(Node):
             self, FollowJointTrajectory,
             '/scaled_joint_trajectory_controller/follow_joint_trajectory'
         )
-        
-
-        self.tl_board_sub = self.create_subscription(
-            PointStamped,
-            '/board_corner_tr_3d',
-            self.tr_board_callback,
-            10
-        )
-
-        self.tr = None
 
         self.gripper_cli = self.create_client(Trigger, '/toggle_gripper')
 
-        self.cube_pose = None
         self.current_plan = None
         self.joint_state = None
 
@@ -62,20 +38,7 @@ class UR7e_CubeGrasp(Node):
             self.get_logger().info("Waiting for initial joint state...")
             rclpy.spin_once(self, timeout_sec=1.0)
 
-        self.goal = PointStamped().point
-        self.goal.x = -0.263
-        self.goal.y = 0.64
-        self.goal.z = -0.28
-
-        while self.tr is None:
-            self.get_logger().info("Waiting for tr state...")
-            rclpy.spin_once(self, timeout_sec=1.0)
-
         self.cube_callback()
-
-    def tr_board_callback(self, msg: PointStamped):
-        self.get_logger().info(f"Received board corner position: {msg.point}")
-        self.tr = msg.point
 
     def joint_state_callback(self, msg: JointState):
         self.joint_state = msg
@@ -96,37 +59,51 @@ class UR7e_CubeGrasp(Node):
         Use the following offsets for pre-grasp position:
         z offset: +0.185 (to be above the cube by accounting for gripper length)
         '''
-        x = self.goal.x
-        y = self.goal.y
-        # -------------------Baymax OFFSETS---------------
-        # dx = 0.055
-        # dy = 0.0
-        # ------------------------------------------------
-        dx = -.055
-        dy = 0.0
-        # x = 0.2
-        # y = 0.16
+        x = -0.2
+        y = 0.6
+
+        board_x = 0.1
+        board_center_y = 0.5
+        board_width = 0.21
+        board_min_y = board_center_y - board_width / 2.0
+        board_max_y = board_center_y + board_width / 2.0
+
+        board_height = 0.30
+        table_z = -0.275
+        board_z = board_height + table_z
+
+        slot = 6
+        test_slot = True
+        board_slot_test = np.array([
+            board_x,
+            board_min_y + (slot / 6.0) * (board_max_y - board_min_y),
+            board_z
+        ])
+
+
+        board_tl = np.array([board_x, board_center_y - board_width / 2.0, board_z])
+        board_tr = np.array([board_x, board_center_y + board_width / 2.0, board_z])
 
         table_height = -0.28
-        tool_height = 0.217
+        tool_height = 0.225
         tool_width = 0.06
         safe_position_job = self.ik_planner.compute_ik(self.joint_state,
-                                            x + dx,
-                                            y + dy,
+                                            x,
+                                            y,
                                             0.5)
         self.job_queue.append(safe_position_job)
 
         grasp_position_job = self.ik_planner.compute_ik(safe_position_job,
-                                    x + dx,
-                                    y + dy,
+                                    x,
+                                    y,
                                     table_height + tool_height) # -0.058
         self.job_queue.append(grasp_position_job)
 
         self.job_queue.append('toggle_grip')
 
         post_position_job = self.ik_planner.compute_ik(grasp_position_job,
-                                    x + dx,
-                                    y + dy,
+                                    x,
+                                    y,
                                     0.5)
         self.job_queue.append(post_position_job)
 
@@ -151,26 +128,51 @@ class UR7e_CubeGrasp(Node):
                                             0.35, qx=qx, qy=qy, qz=qz, qw=qw)
         self.job_queue.append(rotate_job)
 
-        x = self.tr.x
-        y = self.tr.y
-        z = self.tr.z
         board_position_job = self.ik_planner.compute_ik(rotate_job,
-                                            # x + dx,
-                                            0.05,
-                                            y + tool_width,
-                                            z + tool_width, qx=qx, qy=qy, qz=qz, qw=qw) # -0.05
+                                            board_tl[0],
+                                            board_tl[1] + tool_width,
+                                            board_tl[2] + tool_width, qx=qx, qy=qy, qz=qz, qw=qw)
 
         self.job_queue.append(board_position_job)
 
-        slot_position_job = self.ik_planner.compute_ik(board_position_job,
-                                    # x + dx,
-                                    0.05,
-                                    y + tool_width,
-                                    z, qx=qx, qy=qy, qz=qz, qw=qw) # -0.05
+        slot_position_job = None
+        if test_slot:
+            slot_position_job = self.ik_planner.compute_ik(board_position_job,
+                                        board_slot_test[0],
+                                        board_slot_test[1] + tool_width,
+                                        board_slot_test[2] + tool_width / 2.0, qx=qx, qy=qy, qz=qz, qw=qw)
+            self.job_queue.append(slot_position_job)
 
-        self.job_queue.append(slot_position_job)
+            self.job_queue.append('toggle_grip')
+        else:
 
-        self.job_queue.append('toggle_grip')
+            slot_position_job = self.ik_planner.compute_ik(board_position_job,
+                                        board_tl[0],
+                                        board_tl[1] + tool_width,
+                                        board_tl[2] + tool_width / 2.0, qx=qx, qy=qy, qz=qz, qw=qw)
+
+            self.job_queue.append(slot_position_job)
+
+            slot_position_job = self.ik_planner.compute_ik(slot_position_job,
+                                        board_tr[0],
+                                        board_tr[1] + tool_width,
+                                        board_tr[2] + tool_width / 2.0, qx=qx, qy=qy, qz=qz, qw=qw)
+            self.job_queue.append(slot_position_job)
+
+        reset_position_job = self.ik_planner.compute_ik(slot_position_job,
+                                    0.0,
+                                    .6,
+                                    0.35, qx=qx, qy=qy, qz=qz, qw=qw)
+        self.job_queue.append(reset_position_job)
+
+        neutral_position_job = self.ik_planner.compute_ik(reset_position_job,
+                                    0.0,
+                                    .6,
+                                    0.4)
+        self.job_queue.append(neutral_position_job)
+
+        if not test_slot:
+            self.job_queue.append('toggle_grip')
 
 
         self.execute_jobs()
@@ -187,7 +189,7 @@ class UR7e_CubeGrasp(Node):
 
         if isinstance(next_job, JointState):
 
-            traj = self.ik_planner.plan_to_joints(next_job)
+            traj = self.ik_planner.plan_to_joints(self.joint_state, next_job)
             if traj is None:
                 self.get_logger().error("Failed to plan to position")
                 return
@@ -210,28 +212,11 @@ class UR7e_CubeGrasp(Node):
 
         req = Trigger.Request()
         future = self.gripper_cli.call_async(req)
+        # wait for 2 seconds
         rclpy.spin_until_future_complete(self, future, timeout_sec=2.0)
 
-        if not future.done():
-            self.get_logger().error("Gripper service call timed out")
-            rclpy.shutdown()
-            return
-
-        response = future.result()
-
-        if response is None:
-            self.get_logger().error("Gripper service returned no response")
-            rclpy.shutdown()
-            return
-
-        if response.success:
-            self.get_logger().info(f"Gripper activated: {response.message}")
-        else:
-            self.get_logger().error(f"Gripper failed: {response.message}")
-            rclpy.shutdown()
-            return
-
-        self.execute_jobs()
+        self.get_logger().info('Gripper toggled.')
+        self.execute_jobs()  # Proceed to next job
 
             
     def _execute_joint_trajectory(self, joint_traj):

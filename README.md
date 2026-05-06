@@ -22,55 +22,32 @@ ros2 run ur7e_utils enable_comms
 
 Launch usb cam
 ```
+source install/setup.bash
 ros2 launch usb_cam camera.launch.py
-```
-
-Launch disc detection
-```
-ros2 run disc_detector disc_node
 ```
 
 Pick corners
 ```
+source install/setup.bash
 ros2 run board_calibration board_corners
 ```
 
 Pick disc colors
 ```
+source install/setup.bash
 ros2 run board_calibration disc_colors
 ```
 
-Run state detector
-```
-ros2 run game_state game_state_node
-```
-
-Publish the corners
-```
-ros2 run board_detector board_node
-```
-
-Run the solver
-```
-ros2 run game_solver game_solver_node
-```
-
-Run the planner
-```
-ros2 launch game_planner game_planner.launch.py
-```
-
-Separate terminal
+Launch the game logic
 ```
 source install/setup.bash
-ros2 run planning main
+ros2 launch connect4_launch perception.launch.py
 ```
 
-
-Launch aruco tag detection
+Launch moveit and ik service
 ```
 source install/setup.bash
-ros2 launch visual_servoing lab7.launch.py
+ros2 launch planning lab5_bringup.launch.py
 ```
 
 ## Testing
@@ -78,4 +55,11 @@ ros2 launch visual_servoing lab7.launch.py
 ### Tuck
 ```
 ros2 run ur7e_utils reset_state && ros2 run ur7e_utils tuck
+```
+
+### To setup connect4 board
+
+```
+source install/setup.bash
+ros2 run planning debug
 ```

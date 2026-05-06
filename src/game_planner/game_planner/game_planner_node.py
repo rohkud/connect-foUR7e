@@ -37,7 +37,7 @@ class GamePlanner(Node):
         super().__init__('game_planner')
         
         self.declare_parameter('player_color', 'red')
-        self.declare_parameter('solve_interval', 3.0)
+        self.declare_parameter('solve_interval', 15.0)
         self.declare_parameter('alpha', 0.3)
         
         self.player_color = self.get_parameter('player_color').value

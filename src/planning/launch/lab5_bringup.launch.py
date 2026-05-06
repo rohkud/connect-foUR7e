@@ -19,36 +19,6 @@ def generate_launch_description():
     # -------------------------
     # Includes & Nodes
     # -------------------------
-    # RealSense (include rs_launch.py)
-    realsense_launch = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(
-            os.path.join(
-                get_package_share_directory('realsense2_camera'),
-                'launch',
-                'rs_launch.py'
-            )
-        ),
-        launch_arguments={
-            'pointcloud.enable': 'true',
-            'rgb_camera.color_profile': '1920x1080x30',
-        }.items(),
-    )
-
-    # Perception node
-    perception_node = Node(
-        package='perception',
-        executable='process_pointcloud',
-        name='process_pointcloud',
-        output='screen'
-    )
-
-    # Planning TF node
-    planning_tf_node = Node(
-        package='planning',
-        executable='tf',
-        name='tf_node',
-        output='screen'
-    )
 
     # MoveIt include
     moveit_launch_file = os.path.join(
@@ -86,9 +56,6 @@ def generate_launch_description():
     return LaunchDescription([
 
         # Actions
-        realsense_launch,
-        perception_node,
-        planning_tf_node,
         moveit_launch,
         ik_planner_node,
 

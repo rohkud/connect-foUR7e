@@ -27,6 +27,7 @@ class Connect4Main(Node):
         self.latest_disc_data = None
 
         self.robot_busy = False
+        self.busy_timer = None
         self.waiting_for_solver = False
         self.pixel_request_in_progress = False
 
@@ -77,6 +78,9 @@ class Connect4Main(Node):
             PixelToPoint,
             '/pixel_to_point'
         )
+        for srv, name in [(self.place_client, 'run_piece_placement'), (self.pixel_client, 'pixel_to_point')]:
+            while not srv.wait_for_service(timeout_sec=1.0):
+                self.get_logger().info(f'Waiting for /{name} service...')
 
         self.get_logger().warn('amongus. Connect4 main orchestrator started')
 
@@ -224,7 +228,7 @@ class Connect4Main(Node):
             # piece_position.x = result.point.point.x
             # piece_position.y = result.point.point.y
             # piece_position.z = result.point.point.z
-            piece_position.x = .2
+            piece_position.x = -.2
             piece_position.y = 0.6
             piece_position.z = 0.0
 
@@ -235,9 +239,19 @@ class Connect4Main(Node):
 
             board_position = self.column_to_board_position(self.latest_move)
 
-            board_position.x = -0.2
-            board_position.y = 0.6
-            board_position.z = 0.0
+            board_x = 0.1
+            board_center_y = 0.5
+            board_width = 0.22
+            board_min_y = board_center_y - board_width / 2.0
+            board_max_y = board_center_y + board_width / 2.0
+
+            board_height = 0.30
+            table_z = -0.28
+            board_z = board_height + table_z
+
+            board_position.x = board_x
+            board_position.y = board_min_y + (self.latest_move / 6.0) * (board_max_y - board_min_y)
+            board_position.z = board_z
 
             if board_position is None:
                 self.get_logger().warn('amongus. Could not compute board placement position')
@@ -296,6 +310,14 @@ class Connect4Main(Node):
         future = self.place_client.call_async(req)
         future.add_done_callback(self.robot_done_callback)
 
+    def clear_robot_busy(self):
+        self.get_logger().warn("amongus. Robot cooldown done, accepting new moves")
+        self.robot_busy = False
+
+        if self.busy_timer is not None:
+            self.busy_timer.cancel()
+            self.busy_timer = None
+
     def robot_done_callback(self, future):
         try:
             result = future.result()
@@ -310,8 +332,13 @@ class Connect4Main(Node):
         except Exception as e:
             self.get_logger().error(f'amongus. Robot service call failed: {e}')
 
-        self.robot_busy = False
         self.latest_move = None
+
+        self.get_logger().warn("amongus. Keeping robot_busy=True during motion cooldown")
+        if self.busy_timer is not None:
+            self.busy_timer.cancel()
+
+        self.busy_timer = self.create_timer(20.0, self.clear_robot_busy)
 
 
 def main(args=None):
