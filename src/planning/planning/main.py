@@ -7,6 +7,7 @@ from control_msgs.action import FollowJointTrajectory
 from trajectory_msgs.msg import JointTrajectory
 from sensor_msgs.msg import JointState
 from scipy.spatial.transform import Rotation as R
+import time
 
 from planning.ik import IKPlanner
 from planning_interfaces.srv import RunPlacement
@@ -47,7 +48,11 @@ class UR7e_CubeGrasp(Node):
         self.ik_planner = IKPlanner()
         self.job_queue = []
         self.running = False
-        self.last_target_state = None
+        self.retry_timer = None
+        self.current_retry_count = 0
+        self.max_retries = 3
+        self.retry_delay = 0.5  # seconds, will increase exponentially
+        self.current_job = None  # Track the job being executed for retries
 
         self.get_logger().info("Cube grasp service ready: /run_piece_placement")
 
@@ -92,9 +97,6 @@ class UR7e_CubeGrasp(Node):
             response.message = "Failed to build IK job queue"
             return response
 
-        # Added for freezing error
-        self.last_target_state = None
-
         self.execute_jobs()
 
         response.success = True
@@ -109,108 +111,108 @@ class UR7e_CubeGrasp(Node):
         tool_height = 0.225
         tool_width = 0.06
 
-        # Safer/lower heights
-        pickup_safe_z = 0.35
-        carry_z = 0.35
-        board_approach_z = board.z + tool_width + 0.08
-        board_insert_z = board.z + tool_width / 2.0
+        safe_z = 0.5
         grasp_z = table_height + tool_height
 
-        # Keep default gripper-down orientation first.
-        # This avoids wrist flips from the side_down_quat.
-        qx, qy, qz, qw = 0.0, 1.0, 0.0, 0.0
-
         try:
-            # 1. Move above piece
             safe_position_job = self.ik_planner.compute_ik(
-                self.joint_state, x, y, pickup_safe_z,
+                self.joint_state, x, y, safe_z
             )
             if safe_position_job is None:
                 self.get_logger().error("IK failed at safe_position_job")
                 return False
             self.job_queue.append(safe_position_job)
 
-            # 2. Move down to grasp
             grasp_position_job = self.ik_planner.compute_ik(
-                safe_position_job, x, y, grasp_z,
+                safe_position_job, x, y, grasp_z
             )
             if grasp_position_job is None:
                 self.get_logger().error("IK failed at grasp_position_job")
                 return False
             self.job_queue.append(grasp_position_job)
 
-            # 3. Close gripper
             self.job_queue.append('toggle_grip')
 
-            # 4. Lift only a little first
-            small_lift_job = self.ik_planner.compute_ik(
-                grasp_position_job, x, y, 0.20,
-            )
-            if small_lift_job is None:
-                self.get_logger().error("IK failed at small_lift_job")
-                return False
-            self.job_queue.append(small_lift_job)
-
-            # 5. Then lift to carry height
             post_position_job = self.ik_planner.compute_ik(
-                small_lift_job, x, y, carry_z,
+                grasp_position_job, x, y, safe_z
             )
             if post_position_job is None:
                 self.get_logger().error("IK failed at post_position_job")
                 return False
             self.job_queue.append(post_position_job)
 
-            # 6. Move to neutral carry point
             neutral_position_job = self.ik_planner.compute_ik(
-                post_position_job, 0.0, 0.6, carry_z,
+                post_position_job, 0.0, 0.6, 0.4
             )
             if neutral_position_job is None:
                 self.get_logger().error("IK failed at neutral_position_job")
                 return False
             self.job_queue.append(neutral_position_job)
 
-            # 7. Move near board, but still high
-            board_pre_job = self.ik_planner.compute_ik(
-                neutral_position_job,
-                board.x,
-                board.y + tool_width,
-                board_approach_z,
+            side_down_quat = R.from_euler('z', 90, degrees=True) * R.from_quat(
+                [0.0, 1.0, 0.0, 0.0]
             )
-            if board_pre_job is None:
-                self.get_logger().error("IK failed at board_pre_job")
-                return False
-            self.job_queue.append(board_pre_job)
+            side_down_quat = R.from_euler('y', -90, degrees=True) * side_down_quat
+            qx, qy, qz, qw = side_down_quat.as_quat()
 
-            # 8. Lower toward slot
-            slot_position_job = self.ik_planner.compute_ik(
-                board_pre_job,
+            rotate_job = self.ik_planner.compute_ik(
+                neutral_position_job, 0.0, 0.6, 0.35,
+                qx=qx, qy=qy, qz=qz, qw=qw
+            )
+            if rotate_job is None:
+                self.get_logger().error("IK failed at rotate_job")
+                return False
+            self.job_queue.append(rotate_job)
+
+            board_position_job = self.ik_planner.compute_ik(
+                rotate_job,
                 board.x,
                 board.y + tool_width,
-                board_insert_z,
+                board.z + tool_width,
+                qx=qx, qy=qy, qz=qz, qw=qw
+            )
+            if board_position_job is None:
+                self.get_logger().error("IK failed at board_position_job")
+                return False
+            self.job_queue.append(board_position_job)
+
+            slot_position_job = self.ik_planner.compute_ik(
+                board_position_job,
+                board.x,
+                board.y + tool_width,
+                board.z + tool_width / 2.0,
+                qx=qx, qy=qy, qz=qz, qw=qw
             )
             if slot_position_job is None:
                 self.get_logger().error("IK failed at slot_position_job")
                 return False
             self.job_queue.append(slot_position_job)
 
-            # 9. Open gripper
             self.job_queue.append('toggle_grip')
 
-            # 10. Retreat upward
             retreat_job = self.ik_planner.compute_ik(
                 slot_position_job,
                 board.x,
                 board.y + tool_width,
-                board_approach_z,
+                board.z + tool_width,
+                qx=qx, qy=qy, qz=qz, qw=qw
             )
             if retreat_job is None:
                 self.get_logger().error("IK failed at retreat_job")
                 return False
             self.job_queue.append(retreat_job)
 
-            # 11. Return to neutral
+            reset_position_job = self.ik_planner.compute_ik(
+                retreat_job, 0.0, 0.6, 0.35,
+                qx=qx, qy=qy, qz=qz, qw=qw
+            )
+            if reset_position_job is None:
+                self.get_logger().error("IK failed at reset_position_job")
+                return False
+            self.job_queue.append(reset_position_job)
+
             final_neutral_job = self.ik_planner.compute_ik(
-                retreat_job, 0.0, 0.6, carry_z,
+                reset_position_job, 0.0, 0.6, 0.4
             )
             if final_neutral_job is None:
                 self.get_logger().error("IK failed at final_neutral_job")
@@ -227,8 +229,7 @@ class UR7e_CubeGrasp(Node):
         if not self.job_queue:
             self.get_logger().info("All jobs completed.")
             self.running = False
-            self.job_queue = []
-            self.last_target_state = None
+
             done_msg = Bool()
             done_msg.data = True
             self.robot_done_pub.publish(done_msg)
@@ -248,58 +249,113 @@ class UR7e_CubeGrasp(Node):
 
         if isinstance(next_job, JointState):
             self.get_logger().warn("PLANNING JOINT TRAJECTORY")
+            
+            # Store the current job for potential retry
+            self.current_job = next_job
+            self.current_retry_count = 0
 
-            start_state = self.last_target_state if self.last_target_state is not None else self.joint_state
-
-            traj = self.ik_planner.plan_to_joints(start_state, next_job)
+            traj = self.ik_planner.plan_to_joints(self.joint_state, next_job)
 
             if traj is None:
                 self.get_logger().error("Failed to plan to position")
                 self.running = False
+                
+                # Publish robot_done to signal completion
+                done_msg = Bool()
+                done_msg.data = False
+                self.robot_done_pub.publish(done_msg)
+                self.get_logger().warn("Published /robot_done = False (planning failed)")
                 return
-
-            self.last_target_state = next_job
 
             self.get_logger().info("Planned to position")
             self._execute_joint_trajectory(traj.joint_trajectory)
 
         elif next_job == 'toggle_grip':
             self.get_logger().warn("NEXT JOB: TOGGLE_GRIP")
+            self.current_job = None
+            self.current_retry_count = 0
             self._toggle_gripper()
 
         else:
             self.get_logger().error("Unknown job type")
             self.running = False
-    
+            
+            # Publish robot_done to signal completion
+            done_msg = Bool()
+            done_msg.data = False
+            self.robot_done_pub.publish(done_msg)
+            self.get_logger().warn("Published /robot_done = False (unknown job type)")
+
     def _toggle_gripper(self):
         self.get_logger().warn("CALLING GRIPPER SERVICE")
 
         if not self.gripper_cli.wait_for_service(timeout_sec=5.0):
             self.get_logger().error("Gripper service not available")
             self.running = False
+            
+            # Publish robot_done to signal completion
+            done_msg = Bool()
+            done_msg.data = False
+            self.robot_done_pub.publish(done_msg)
+            self.get_logger().warn("Published /robot_done = False (gripper unavailable)")
             return
 
         req = Trigger.Request()
         future = self.gripper_cli.call_async(req)
-        # Use an asynchronous callback instead of spinning the executor
-        future.add_done_callback(self._on_gripper_done)
 
-    def _on_gripper_done(self, future):
-        try:
-            response = future.result()
-            if response.success:
-                self.get_logger().warn(f"GRIPPER DONE | message={response.message}")
-                self.execute_jobs()
-            else:
-                self.get_logger().error(f"Gripper failed: {response.message}")
-                self.running = False
-        except Exception as e:
-            self.get_logger().error(f"Gripper service call failed: {e}")
+        rclpy.spin_until_future_complete(self, future, timeout_sec=2.0)
+
+        if not future.done():
+            self.get_logger().error("Gripper service call timed out")
             self.running = False
+            
+            # Publish robot_done to signal completion
+            done_msg = Bool()
+            done_msg.data = False
+            self.robot_done_pub.publish(done_msg)
+            self.get_logger().warn("Published /robot_done = False (gripper timeout)")
+            return
+
+        response = future.result()
+
+        if response is None:
+            self.get_logger().error("Gripper service returned no response")
+            self.running = False
+            
+            # Publish robot_done to signal completion
+            done_msg = Bool()
+            done_msg.data = False
+            self.robot_done_pub.publish(done_msg)
+            self.get_logger().warn("Published /robot_done = False (gripper no response)")
+            return
+
+        if response.success:
+            self.get_logger().warn(f"GRIPPER DONE | message={response.message}")
+            # Small delay to allow gripper to settle before next trajectory
+            time.sleep(0.2)
+            self.execute_jobs()
+        else:
+            self.get_logger().error(f"Gripper failed: {response.message}")
+            self.running = False
+            
+            # Publish robot_done to signal completion
+            done_msg = Bool()
+            done_msg.data = False
+            self.robot_done_pub.publish(done_msg)
+            self.get_logger().warn("Published /robot_done = False (gripper failed)")
 
     def _execute_joint_trajectory(self, joint_traj: JointTrajectory):
         self.get_logger().warn("WAITING FOR CONTROLLER ACTION SERVER")
-        self.exec_ac.wait_for_server()
+        
+        # Wait for server with timeout
+        if not self.exec_ac.wait_for_server(timeout_sec=5.0):
+            self.get_logger().error("Controller action server not available (timeout)")
+            self.current_retry_count = 0
+            self.execute_jobs()
+            return
+        
+        # Small delay to ensure controller is fully ready
+        time.sleep(0.1)
 
         goal = FollowJointTrajectory.Goal()
         goal.trajectory = joint_traj
@@ -314,6 +370,12 @@ class UR7e_CubeGrasp(Node):
         if not goal_handle.accepted:
             self.get_logger().error("TRAJECTORY GOAL REJECTED")
             self.running = False
+            
+            # Publish robot_done to signal completion
+            done_msg = Bool()
+            done_msg.data = False
+            self.robot_done_pub.publish(done_msg)
+            self.get_logger().warn("Published /robot_done = False (goal rejected)")
             return
 
         self.get_logger().warn("TRAJECTORY ACCEPTED BY CONTROLLER")
@@ -334,16 +396,78 @@ class UR7e_CubeGrasp(Node):
             )
 
             if result.error_code != 0:
-                self.get_logger().error("Trajectory did not finish successfully")
-                self.running = False
+                self.get_logger().error(
+                    f"Trajectory did not finish successfully: {result.error_string}"
+                )
+                
+                # Check if error is retryable (controller transition/deactivation)
+                is_retryable = "deactivate" in result.error_string.lower() or \
+                               "transition" in result.error_string.lower() or \
+                               result.error_code == -1
+                
+                if is_retryable and self.current_retry_count < self.max_retries:
+                    self.get_logger().warn(
+                        f"Retrying trajectory (attempt {self.current_retry_count + 1}/{self.max_retries})"
+                    )
+                    self._schedule_retry()
+                    return
+                
+                # Non-retryable or max retries exceeded, continue with next job
+                self.current_retry_count = 0
+                self.execute_jobs()
                 return
 
             self.get_logger().info("Execution complete.")
+            self.current_retry_count = 0
             self.execute_jobs()
 
         except Exception as e:
             self.get_logger().error(f"Execution failed: {e}")
-            self.running = False
+            # On exception, try to retry if possible
+            if self.current_retry_count < self.max_retries:
+                self.get_logger().warn(
+                    f"Retrying trajectory after exception (attempt {self.current_retry_count + 1}/{self.max_retries})"
+                )
+                self._schedule_retry()
+            else:
+                self.current_retry_count = 0
+                self.execute_jobs()
+
+    def _schedule_retry(self):
+        """Schedule a retry of the current trajectory after a delay."""
+        if self.retry_timer is not None:
+            self.destroy_timer(self.retry_timer)
+        
+        self.current_retry_count += 1
+        # Exponential backoff: 0.5s, 1.0s, 1.5s
+        delay = self.retry_delay * self.current_retry_count
+        
+        self.get_logger().warn(f"Scheduling retry in {delay:.2f}s")
+        self.retry_timer = self.create_timer(
+            delay,
+            self._retry_current_trajectory
+        )
+
+    def _retry_current_trajectory(self):
+        """Retry the current trajectory."""
+        self.destroy_timer(self.retry_timer)
+        self.retry_timer = None
+        
+        if self.current_job is not None and isinstance(self.current_job, JointState):
+            self.get_logger().warn("RETRYING TRAJECTORY")
+            traj = self.ik_planner.plan_to_joints(self.joint_state, self.current_job)
+            
+            if traj is None:
+                self.get_logger().error("Failed to re-plan trajectory on retry")
+                self.current_retry_count = 0
+                self.execute_jobs()
+                return
+            
+            self._execute_joint_trajectory(traj.joint_trajectory)
+        else:
+            self.get_logger().error("No trajectory job to retry")
+            self.current_retry_count = 0
+            self.execute_jobs()
 
 
 def main(args=None):
