@@ -1,11 +1,11 @@
 # connect-foUR7e
 CV Connect 4 using UR7e arm. 
 
-Requires
+#### Requires
 - UR7e
 - Logitech C922 Pro Stream Webcam
 
-Features
+#### Features
 - Board Localization (using homography correction)
 - Disc color detection
 - Connect-4 Game Solver
