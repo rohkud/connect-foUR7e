@@ -22,6 +22,8 @@ setup(
         'console_scripts': [
             'board_corners = board_calibration.board_corners:main',
             'disc_colors = board_calibration.disc_colors:main',
+            'capture = board_calibration.capture:main',
+            'aruco_test = board_calibration.aruco_test:main',
         ],
     },
 )

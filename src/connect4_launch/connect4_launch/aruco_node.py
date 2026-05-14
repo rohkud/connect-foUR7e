@@ -49,21 +49,23 @@ Version: 10/26/2020
 
 """
 
+import math
+
+import cv2
+import numpy as np
 import rclpy
 import rclpy.node
-from rclpy.qos import qos_profile_sensor_data
 from cv_bridge import CvBridge
-import numpy as np
-import cv2
-import math
+from geometry_msgs.msg import Pose, PoseArray, TransformStamped
+from rcl_interfaces.msg import ParameterDescriptor, ParameterType
+from rclpy.qos import qos_profile_sensor_data
+from ros2_aruco_interfaces.msg import ArucoMarkers
+
 # import tf_transformations
 # from autolab_core import transformations
-from sensor_msgs.msg import CameraInfo
-from sensor_msgs.msg import Image
-from geometry_msgs.msg import PoseArray, Pose, TransformStamped
-from ros2_aruco_interfaces.msg import ArucoMarkers
-from rcl_interfaces.msg import ParameterDescriptor, ParameterType
+from sensor_msgs.msg import CameraInfo, Image
 from tf2_ros import TransformBroadcaster
+
 
 def quaternion_from_matrix(matrix):
     """Return quaternion from rotation matrix.
@@ -122,13 +124,13 @@ class ArucoNode(rclpy.node.Node):
 
         self.declare_parameter(
             name="robot_marker_id",
-            value=6,   # default
+            value=6,  # default
             descriptor=ParameterDescriptor(
                 type=ParameterType.PARAMETER_INTEGER,
                 description="Aruco marker ID mounted on the robot/base.",
             ),
         )
-        
+
         self.declare_parameter(
             name="image_topic",
             value="/camera1/image_raw",
@@ -156,30 +158,23 @@ class ArucoNode(rclpy.node.Node):
             ),
         )
 
-
         self.marker_size = (
             self.get_parameter("marker_size").get_parameter_value().double_value
         )
         self.get_logger().debug(f"Marker size: {self.marker_size}")
-        
+
         self.marker_size_map = {i: 0.10 for i in range(1, 51)}
 
         # Robot/base marker is 0.15 m
         self.robot_marker_id = (
-            self.get_parameter("robot_marker_id")
-            .get_parameter_value()
-            .integer_value
+            self.get_parameter("robot_marker_id").get_parameter_value().integer_value
         )
 
         self.marker_size_map[self.robot_marker_id] = 0.15
 
-        self.get_logger().debug(
-            f"Robot marker id: {self.robot_marker_id}"
-        )
+        self.get_logger().debug(f"Robot marker id: {self.robot_marker_id}")
 
-        self.get_logger().debug(
-            f"Marker size map: {self.marker_size_map}"
-        )
+        self.get_logger().debug(f"Marker size map: {self.marker_size_map}")
 
         dictionary_id_name = (
             self.get_parameter("aruco_dictionary_id").get_parameter_value().string_value
@@ -246,7 +241,7 @@ class ArucoNode(rclpy.node.Node):
 
         self.aruco_dictionary = cv2.aruco.Dictionary_get(dictionary_id)
         self.aruco_parameters = cv2.aruco.DetectorParameters_create()
-        
+
         self.aruco_dictionary2 = cv2.aruco.Dictionary_get(dictionary_id2)
         self.aruco_parameters2 = cv2.aruco.DetectorParameters_create()
 
@@ -288,7 +283,11 @@ class ArucoNode(rclpy.node.Node):
         self.get_logger().debug(f"Detected marker ids: {marker_ids} and {marker_ids2}")
 
         corners = corners + corners2
-        marker_ids = np.concatenate((marker_ids, marker_ids2), axis=0) if marker_ids is not None and marker_ids2 is not None else (marker_ids if marker_ids is not None else marker_ids2)
+        marker_ids = (
+            np.concatenate((marker_ids, marker_ids2), axis=0)
+            if marker_ids is not None and marker_ids2 is not None
+            else (marker_ids if marker_ids is not None else marker_ids2)
+        )
 
         if marker_ids is not None:
             # process each marker individually to allow for diff marker sizes
@@ -327,12 +326,19 @@ class ArucoNode(rclpy.node.Node):
             if len(turtlebot_markers) > 0:
                 turtlebot_rvecs, turtlebot_tvecs = [], []
                 if cv2.__version__ > "4.0.0":
-                    turtlebot_rvecs, turtlebot_tvecs, _ = cv2.aruco.estimatePoseSingleMarkers(
-                        turtlebot_corners, 0.15, self.intrinsic_mat, self.distortion
+                    turtlebot_rvecs, turtlebot_tvecs, _ = (
+                        cv2.aruco.estimatePoseSingleMarkers(
+                            turtlebot_corners, 0.15, self.intrinsic_mat, self.distortion
+                        )
                     )
                 else:
-                    turtlebot_rvecs, turtlebot_tvecs = cv2.aruco.estimatePoseSingleMarkers(
-                        turtlebot_corners, turtlebot_markers, self.intrinsic_mat, self.distortion
+                    turtlebot_rvecs, turtlebot_tvecs = (
+                        cv2.aruco.estimatePoseSingleMarkers(
+                            turtlebot_corners,
+                            turtlebot_markers,
+                            self.intrinsic_mat,
+                            self.distortion,
+                        )
                     )
                 rvecs.extend(turtlebot_rvecs)
                 tvecs.extend(turtlebot_tvecs)
@@ -368,7 +374,7 @@ class ArucoNode(rclpy.node.Node):
                 else:
                     transform.header.frame_id = self.camera_frame
                 transform.child_frame_id = f"ar_marker_{marker_id[0]}"
-                
+
                 transform.transform.translation.x = pose.position.x
                 transform.transform.translation.y = pose.position.y
                 transform.transform.translation.z = pose.position.z
@@ -376,7 +382,7 @@ class ArucoNode(rclpy.node.Node):
                 transform.transform.rotation.y = pose.orientation.y
                 transform.transform.rotation.z = pose.orientation.z
                 transform.transform.rotation.w = pose.orientation.w
-                
+
                 self.tf_broadcaster.sendTransform(transform)
                 pose_array.poses.append(pose)
                 markers.poses.append(pose)

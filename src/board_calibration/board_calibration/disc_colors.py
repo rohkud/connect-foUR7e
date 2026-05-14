@@ -2,13 +2,11 @@
 
 import cv2
 import numpy as np
-
 import rclpy
+from cv_bridge import CvBridge
+from game_msgs.msg import HsvColor
 from rclpy.node import Node
 from sensor_msgs.msg import Image
-from game_msgs.msg import HsvColor
-from cv_bridge import CvBridge
-
 
 CLICK_ORDER = [
     "RED TABLE",
@@ -246,3 +244,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

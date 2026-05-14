@@ -1,67 +1,69 @@
 #!/usr/bin/env python3
 
 import rclpy
-from rclpy.node import Node
-
-from std_msgs.msg import Int8MultiArray, Bool
+from game_msgs.msg import DiscLoc2d
 from geometry_msgs.msg import Point
-
+from piece_localization_interfaces.srv import PixelToPoint
 from planning_interfaces.srv import RunPlacement, SolveMove
+from rclpy.node import Node
+from std_msgs.msg import Bool, Int8MultiArray
 
 
 class Connect4Main(Node):
     def __init__(self):
-        super().__init__('connect4_main')
+        super().__init__("connect4_main")
 
-        self.declare_parameter('robot_color', 1)   # 1=red, 2=yellow
-        self.declare_parameter('human_color', 2)   # 1=red, 2=yellow
+        self.declare_parameter("robot_color", 1)  # 1=red, 2=yellow
+        self.declare_parameter("human_color", 2)  # 1=red, 2=yellow
 
-        self.robot_color = self.get_parameter('robot_color').value
-        self.human_color = self.get_parameter('human_color').value
+        self.robot_color = self.get_parameter("robot_color").value
+        self.human_color = self.get_parameter("human_color").value
 
         self.last_stable_board = None
         self.latest_move = None
+
+        self.active_disc_data = None
 
         self.robot_busy = False
         self.solver_busy = False
 
         self.board_sub = self.create_subscription(
-            Int8MultiArray,
-            '/game_planner/stable_board',
-            self.board_callback,
-            10
+            Int8MultiArray, "/game_planner/stable_board", self.board_callback, 10
         )
 
         self.robot_done_sub = self.create_subscription(
-            Bool,
-            '/robot_done',
-            self.robot_done_topic_callback,
-            10
+            Bool, "/robot_done", self.robot_done_topic_callback, 10
         )
 
-        self.solve_client = self.create_client(
-            SolveMove,
-            '/solve_move'
+        self.active_disc_sub = self.create_subscription(
+            DiscLoc2d, "/active_disc_data", self.active_disc_data_callback, 10
         )
 
-        self.place_client = self.create_client(
-            RunPlacement,
-            '/run_piece_placement'
-        )
+        self.solve_client = self.create_client(SolveMove, "/solve_move")
+
+        self.place_client = self.create_client(RunPlacement, "/run_piece_placement")
+
+        self.pixel_to_point_client = self.create_client(PixelToPoint, "/pixel_to_point")
 
         while not self.solve_client.wait_for_service(timeout_sec=1.0):
-            self.get_logger().info('Waiting for /solve_move service...')
+            self.get_logger().info("Waiting for /solve_move service...")
 
         while not self.place_client.wait_for_service(timeout_sec=1.0):
-            self.get_logger().info('Waiting for /run_piece_placement service...')
+            self.get_logger().info("Waiting for /run_piece_placement service...")
 
-        self.get_logger().warn('amongus. Connect4 main orchestrator started')
+        while not self.pixel_to_point_client.wait_for_service(timeout_sec=1.0):
+            self.get_logger().info("Waiting for /pixel_to_point service...")
+
+        self.get_logger().warn("Connect4 main orchestrator started")
+
+    def active_disc_data_callback(self, msg):
+        self.active_disc_data = msg
 
     def robot_done_topic_callback(self, msg):
         if not msg.data:
             return
 
-        self.get_logger().warn('amongus. Robot truly done, accepting new moves')
+        self.get_logger().warn("Robot truly done, accepting new moves")
         self.robot_busy = False
         self.latest_move = None
 
@@ -73,14 +75,14 @@ class Connect4Main(Node):
 
         if self.last_stable_board is None:
             self.last_stable_board = current_board
-            self.get_logger().warn('amongus. Initial board saved')
+            self.get_logger().warn("Initial board saved")
             return
 
         if current_board == self.last_stable_board:
             return
 
         if self.robot_busy:
-            self.get_logger().warn('amongus. Board changed but robot is busy; ignoring')
+            self.get_logger().warn("Board changed but robot is busy; ignoring")
             self.last_stable_board = current_board
             return
 
@@ -88,7 +90,7 @@ class Connect4Main(Node):
 
         if len(changes) != 1:
             self.get_logger().warn(
-                f'amongus. Ignoring board change because {len(changes)} new pieces were detected'
+                f"Ignoring board change because {len(changes)} new pieces were detected"
             )
             self.last_stable_board = current_board
             return
@@ -96,7 +98,7 @@ class Connect4Main(Node):
         index, color = changes[0]
 
         if color != self.human_color:
-            self.get_logger().warn('amongus. Board changed, but it was not the human color')
+            self.get_logger().warn("Board changed, but it was not the human color")
             self.last_stable_board = current_board
             return
 
@@ -104,7 +106,7 @@ class Connect4Main(Node):
         col = index % 7
 
         self.get_logger().warn(
-            f'amongus. Human move detected at row={row}, col={col}. Calling solver.'
+            f"Human move detected at row={row}, col={col}. Calling solver."
         )
 
         self.last_stable_board = current_board
@@ -121,11 +123,11 @@ class Connect4Main(Node):
 
     def request_solver_move(self, board):
         if self.robot_busy:
-            self.get_logger().warn('amongus. Robot busy, not solving')
+            self.get_logger().warn("Robot busy, not solving")
             return
 
         if self.solver_busy:
-            self.get_logger().warn('amongus. Solver already busy')
+            self.get_logger().warn("Solver already busy")
             return
 
         req = SolveMove.Request()
@@ -134,7 +136,7 @@ class Connect4Main(Node):
 
         self.solver_busy = True
 
-        self.get_logger().warn('amongus. Calling /solve_move service')
+        self.get_logger().warn("Calling /solve_move service")
 
         future = self.solve_client.call_async(req)
         future.add_done_callback(self.solve_done_callback)
@@ -146,42 +148,72 @@ class Connect4Main(Node):
             result = future.result()
 
             if result is None:
-                self.get_logger().error('amongus. Solver returned no result')
+                self.get_logger().error("Solver returned no result")
                 return
 
             if not result.success:
-                self.get_logger().error(f'amongus. Solver failed: {result.message}')
+                self.get_logger().error(f"Solver failed: {result.message}")
                 return
 
             self.latest_move = int(result.column)
 
-            self.get_logger().warn(
-                f'amongus. Solver chose column {self.latest_move}'
-            )
+            self.get_logger().warn(f"Solver chose column {self.latest_move}")
 
             self.try_run_robot()
 
         except Exception as e:
-            self.get_logger().error(f'amongus. Solver service failed: {e}')
+            self.get_logger().error(f"Solver service failed: {e}")
 
     def try_run_robot(self):
-        self.get_logger().warn('amongus. try_run_robot called')
+        self.get_logger().warn("try_run_robot called")
 
         if self.robot_busy:
-            self.get_logger().warn('amongus. Robot already busy')
+            self.get_logger().warn("Robot already busy")
             return
 
         if self.latest_move is None:
-            self.get_logger().warn('amongus. No solver move available')
+            self.get_logger().warn("No solver move available")
             return
 
-        self.robot_busy = True
+        self.get_piece_position()
 
-        piece_position = Point()
-        piece_position.x = -0.2
-        piece_position.y = 0.6
-        piece_position.z = 0.0
+    def get_piece_position(self):
+        if self.active_disc_data is None or len(self.active_disc_data.x) == 0:
+            # if True:
+            self.get_logger().warn("No active disc data available")
 
+            p = Point()
+            p.x = -0.2
+            p.y = 0.6
+            p.z = -0.28
+
+            self.try_run_robot2(p)
+            return
+
+        req = PixelToPoint.Request()
+        req.u = self.active_disc_data.x[0]
+        req.v = self.active_disc_data.y[0]
+        req.z_seed = -0.28
+        future = self.pixel_to_point_client.call_async(req)
+        future.add_done_callback(self.pixel_to_point_done_callback)
+
+    def pixel_to_point_done_callback(self, future):
+        try:
+            response = future.result()
+
+            if response.success:
+                point = response.point.point
+                self.get_logger().warn(
+                    f"Pixel to point succeeded: ({point.x:.3f}, {point.y:.3f}, {point.z:.3f})"
+                )
+                self.try_run_robot2(point)
+            else:
+                self.get_logger().error(f"Pixel to point failed: {response.message}")
+
+        except Exception as e:
+            self.get_logger().error(f"Pixel to point service call failed: {e}")
+
+    def try_run_robot2(self, piece_position):
         board_position = self.get_hardcoded_board_position(self.latest_move)
 
         self.call_robot_service(piece_position, board_position)
@@ -203,21 +235,22 @@ class Connect4Main(Node):
         p.z = board_z
 
         self.get_logger().warn(
-            f'amongus. Hardcoded board position for col {col}: '
-            f'({p.x:.3f}, {p.y:.3f}, {p.z:.3f})'
+            f"Hardcoded board position for col {col}: "
+            f"({p.x:.3f}, {p.y:.3f}, {p.z:.3f})"
         )
 
         return p
 
     def call_robot_service(self, piece_position, board_position):
+        self.robot_busy = True
         req = RunPlacement.Request()
         req.piece_position = piece_position
         req.board_position = board_position
 
         self.get_logger().warn(
-            f'amongus. Calling robot service: '
-            f'piece=({piece_position.x:.3f}, {piece_position.y:.3f}, {piece_position.z:.3f}), '
-            f'board=({board_position.x:.3f}, {board_position.y:.3f}, {board_position.z:.3f})'
+            f"Calling robot service: "
+            f"piece=({piece_position.x:.3f}, {piece_position.y:.3f}, {piece_position.z:.3f}), "
+            f"board=({board_position.x:.3f}, {board_position.y:.3f}, {board_position.z:.3f})"
         )
 
         future = self.place_client.call_async(req)
@@ -228,26 +261,22 @@ class Connect4Main(Node):
             result = future.result()
 
             if result is None:
-                self.get_logger().error('amongus. Robot service returned no result')
+                self.get_logger().error("Robot service returned no result")
                 self.robot_busy = False
                 return
 
             if result.success:
+                self.get_logger().warn(f"Robot placement started: {result.message}")
                 self.get_logger().warn(
-                    f'amongus. Robot placement started: {result.message}'
-                )
-                self.get_logger().warn(
-                    'amongus. Waiting for /robot_done before accepting new moves'
+                    "Waiting for /robot_done before accepting new moves"
                 )
             else:
-                self.get_logger().error(
-                    f'amongus. Robot placement failed: {result.message}'
-                )
+                self.get_logger().error(f"Robot placement failed: {result.message}")
                 self.robot_busy = False
                 return
 
         except Exception as e:
-            self.get_logger().error(f'amongus. Robot service call failed: {e}')
+            self.get_logger().error(f"Robot service call failed: {e}")
             self.robot_busy = False
 
 
@@ -259,5 +288,6 @@ def main(args=None):
     rclpy.shutdown()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
+

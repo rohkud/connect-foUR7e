@@ -1,22 +1,19 @@
 #!/usr/bin/env python3
 
 import rclpy
-from rclpy.node import Node
-
 from planning_interfaces.srv import SolveMove
+from rclpy.node import Node
 
 
 class GameSolver(Node):
     def __init__(self):
-        super().__init__('game_solver')
+        super().__init__("game_solver")
 
         self.solve_srv = self.create_service(
-            SolveMove,
-            '/solve_move',
-            self.solve_callback
+            SolveMove, "/solve_move", self.solve_callback
         )
 
-        self.get_logger().info('Game solver service started: /solve_move')
+        self.get_logger().info("Game solver service started: /solve_move")
 
     def solve_callback(self, request, response):
         data = list(request.board)
@@ -24,33 +21,33 @@ class GameSolver(Node):
         if len(data) != 42:
             response.success = False
             response.column = -1
-            response.message = f'Invalid board size: {len(data)}, expected 42'
+            response.message = f"Invalid board size: {len(data)}, expected 42"
             return response
 
-        board = [data[i * 7:(i + 1) * 7] for i in range(6)]
+        board = [data[i * 7 : (i + 1) * 7] for i in range(6)]
         player = int(request.player)
 
         if player not in [1, 2]:
             response.success = False
             response.column = -1
-            response.message = f'Invalid player: {player}, expected 1 or 2'
+            response.message = f"Invalid player: {player}, expected 1 or 2"
             return response
 
-        self.get_logger().info(f'SolveMove called for player {player}')
+        self.get_logger().info(f"SolveMove called for player {player}")
 
         move = self.get_best_move(board, player)
 
         if move is None:
             response.success = False
             response.column = -1
-            response.message = 'No valid move found'
+            response.message = "No valid move found"
             return response
 
         response.success = True
         response.column = int(move)
-        response.message = f'Best move is column {move}'
+        response.message = f"Best move is column {move}"
 
-        self.get_logger().info(f'Optimal move for player {player}: column {move}')
+        self.get_logger().info(f"Optimal move for player {player}: column {move}")
         return response
 
     def get_row(self, board, col):
@@ -128,7 +125,7 @@ class GameSolver(Node):
                 return None, score_position(board)
 
             if maximizing:
-                best_score = -float('inf')
+                best_score = -float("inf")
                 best_col = valid_moves[0]
 
                 for col in valid_moves:
@@ -143,7 +140,7 @@ class GameSolver(Node):
 
                 return best_col, best_score
 
-            best_score = float('inf')
+            best_score = float("inf")
             best_col = valid_moves[0]
 
             for col in valid_moves:
@@ -170,5 +167,6 @@ def main(args=None):
     rclpy.shutdown()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
+

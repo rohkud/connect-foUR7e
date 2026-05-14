@@ -10,26 +10,26 @@ PURPOSE:
 ================================================================================
 """
 
+import numpy as np
+
 #!/usr/bin/env python3
 import rclpy
-from rclpy.node import Node
-from geometry_msgs.msg import TransformStamped, PoseArray, PointStamped
-from tf2_ros import TransformBroadcaster
-from scipy.spatial.transform import Rotation as R
-from ros2_aruco_interfaces.msg import ArucoMarkers
-from tf2_ros import Buffer, TransformListener, TransformException
+from geometry_msgs.msg import PointStamped, PoseArray, TransformStamped
 from rcl_interfaces.msg import ParameterDescriptor, ParameterType
-
-import numpy as np
+from rclpy.node import Node
 from rclpy.time import Time
+from ros2_aruco_interfaces.msg import ArucoMarkers
+from scipy.spatial.transform import Rotation as R
+from tf2_ros import Buffer, TransformBroadcaster, TransformException, TransformListener
+
 
 class ConstantTransformPublisher(Node):
     def __init__(self):
-        super().__init__('camera_tf')
+        super().__init__("camera_tf")
         self.br = TransformBroadcaster(self)
         self.declare_parameter(
             name="robot_marker_id",
-            value=6,   # default
+            value=6,  # default
             descriptor=ParameterDescriptor(
                 type=ParameterType.PARAMETER_INTEGER,
                 description="Aruco marker ID mounted on the robot/base.",
@@ -37,9 +37,7 @@ class ConstantTransformPublisher(Node):
         )
 
         self.robot_marker_id = (
-            self.get_parameter("robot_marker_id")
-            .get_parameter_value()
-            .integer_value
+            self.get_parameter("robot_marker_id").get_parameter_value().integer_value
         )
 
         self.tf_buffer = Buffer()
@@ -47,51 +45,61 @@ class ConstantTransformPublisher(Node):
 
         self.markerSub = self.create_subscription(
             ArucoMarkers,
-            'aruco_markers',
+            "aruco_markers",
             self.aruco_marker_callback,
             5,
         )
-        self.get_logger().debug('Constant Transform Publisher initialized')
-        self.g_base_ar = np.array([[-1, 0, 0, 0],
-                      [0, 0, 1, 0.16],
-                      [0, 1, 0, -0.13],
-                      [0, 0, 0, 1.0]
-        ])
+        self.get_logger().debug("Constant Transform Publisher initialized")
+        self.g_base_ar = np.array(
+            [[-1, 0, 0, 0], [0, 0, 1, 0.16], [0, 1, 0, -0.13], [0, 0, 0, 1.0]]
+        )
 
     def tf_matrix(self, tf):
         # Convert geometry_msgs/Transform to 4x4 homogeneous transformation matrix
-        translation = (tf.transform.translation.x,
-                       tf.transform.translation.y,
-                       tf.transform.translation.z)
-        rotation_quat = (tf.transform.rotation.x,
-                         tf.transform.rotation.y,
-                         tf.transform.rotation.z,
-                         tf.transform.rotation.w)
+        translation = (
+            tf.transform.translation.x,
+            tf.transform.translation.y,
+            tf.transform.translation.z,
+        )
+        rotation_quat = (
+            tf.transform.rotation.x,
+            tf.transform.rotation.y,
+            tf.transform.rotation.z,
+            tf.transform.rotation.w,
+        )
         # Convert quaternion to rotation matrix using scipy
         rot = R.from_quat(rotation_quat)
         rot_matrix = rot.as_matrix()
-        
+
         # Create 4x4 homogeneous matrix
         T = np.eye(4)
         T[0:3, 0:3] = rot_matrix
         T[0:3, 3] = translation
         return T
-    
+
     def invert_transform(self, pose):
         """Invert a pose transformation"""
         # Invert rotation
-        rot = R.from_quat([pose.orientation.x, pose.orientation.y, 
-                        pose.orientation.z, pose.orientation.w])
+        rot = R.from_quat(
+            [
+                pose.orientation.x,
+                pose.orientation.y,
+                pose.orientation.z,
+                pose.orientation.w,
+            ]
+        )
         rot_inv = rot.inv()
-        
+
         # Invert translation
         trans = np.array([pose.position.x, pose.position.y, pose.position.z])
         trans_inv = -rot_inv.apply(trans)
-        
+
         return trans_inv, rot_inv
 
     def aruco_marker_callback(self, msg):
-        self.get_logger().debug(f"Marker callback triggered with {len(msg.marker_ids)} markers")
+        self.get_logger().debug(
+            f"Marker callback triggered with {len(msg.marker_ids)} markers"
+        )
         for i, marker_id in enumerate(msg.marker_ids):
             if marker_id == self.robot_marker_id:
                 pose = msg.poses[i]
@@ -100,11 +108,11 @@ class ConstantTransformPublisher(Node):
                 g_ar_camera[0:3, 0:3] = rot_inv.as_matrix()
                 g_ar_camera[0:3, 3] = trans_inv
                 g_base_camera = self.g_base_ar @ g_ar_camera
-                
+
                 t = TransformStamped()
                 t.header.stamp = self.get_clock().now().to_msg()
-                t.header.frame_id = 'base_link'
-                t.child_frame_id = 'camera1'
+                t.header.frame_id = "base_link"
+                t.child_frame_id = "camera1"
                 t.transform.translation.x = g_base_camera[0, 3]
                 t.transform.translation.y = g_base_camera[1, 3]
                 t.transform.translation.z = g_base_camera[2, 3]
@@ -116,6 +124,7 @@ class ConstantTransformPublisher(Node):
                 t.transform.rotation.w = q[3]
                 self.br.sendTransform(t)
 
+
 def main():
     rclpy.init()
     node = ConstantTransformPublisher()
@@ -123,5 +132,6 @@ def main():
     node.destroy_node()
     rclpy.shutdown()
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     main()

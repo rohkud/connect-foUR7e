@@ -1,49 +1,29 @@
-"""
-================================================================================
-Static Transform Broadcaster (static_tf_transform.py)
-================================================================================
-
-PURPOSE:
-    Publishes static coordinate frame transformation from robot wrist to camera.
-    Enables coordinate conversions between the UR7e gripper frame and RealSense
-    camera frame, essential for connecting 3D perception to motion control.
-================================================================================
-"""
-
-#!/usr/bin/env python3
-import rclpy
-from rclpy.node import Node
-from geometry_msgs.msg import TransformStamped
-from tf2_ros import StaticTransformBroadcaster
-from scipy.spatial.transform import Rotation as R
 import numpy as np
+import rclpy
+from geometry_msgs.msg import TransformStamped
+from rclpy.node import Node
+from scipy.spatial.transform import Rotation as R
+from tf2_ros import StaticTransformBroadcaster
+
 
 class ConstantTransformPublisher(Node):
     def __init__(self):
-        super().__init__('constant_tf_publisher')
+        super().__init__("constant_tf_publisher")
         self.br = StaticTransformBroadcaster(self)
 
         # Homogeneous transform G_wrist_3_link->camera_depth_optical
-        G = np.array([[-1, 0, 0, 0],
-                      [0, 0, 1, 0.16],
-                      [0, 1, 0, -0.13],
-                      [0, 0, 0, 1.0]
-        ])
+        G = np.array([[-1, 0, 0, 0], [0, 0, 1, 0.16], [0, 1, 0, -0.13], [0, 0, 0, 1.0]])
 
         # Create TransformStamped
         self.transform = TransformStamped()
-
-        # ------------------------------------------
-        # TODO: Fill out TransformStamped message
-        # ------------------------------------------
 
         # Convert rotation matrix to quaternion (x, y, z, w)
         scipy_rotation = R.from_matrix(G[0:3, 0:3])
         q = scipy_rotation.as_quat()
 
         # Populate TransformStamped
-        self.transform.header.frame_id = 'base_link'
-        self.transform.child_frame_id = 'ar_marker_6'
+        self.transform.header.frame_id = "base_link"
+        self.transform.child_frame_id = "ar_marker_6"
         self.transform.transform.translation.x = G[0, 3]
         self.transform.transform.translation.y = G[1, 3]
         self.transform.transform.translation.z = G[2, 3]
@@ -54,12 +34,12 @@ class ConstantTransformPublisher(Node):
 
         self.get_logger().info(f"Broadcasting transform:\n{G}\nQuaternion: {q}")
 
-
         self.timer = self.create_timer(0.05, self.broadcast_tf)
 
     def broadcast_tf(self):
         self.transform.header.stamp = self.get_clock().now().to_msg()
         self.br.sendTransform(self.transform)
+
 
 def main():
     rclpy.init()
@@ -68,5 +48,6 @@ def main():
     node.destroy_node()
     rclpy.shutdown()
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     main()

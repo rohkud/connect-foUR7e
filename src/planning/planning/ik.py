@@ -1,24 +1,12 @@
-"""
-================================================================================
-Inverse Kinematics Planner (ik.py)
-================================================================================
-
-PURPOSE:
-    Provides interface to MoveIt's inverse kinematics and motion planning services.
-    Converts Cartesian space targets (x, y, z, orientation) to joint configurations
-    and plans collision-free trajectories for the UR7e robot manipulator.
-================================================================================
-"""
-
-import rclpy
-from rclpy.node import Node
-from moveit_msgs.srv import GetPositionIK, GetMotionPlan
-from moveit_msgs.msg import PositionIKRequest, Constraints, JointConstraint
-from geometry_msgs.msg import PoseStamped
-from sensor_msgs.msg import JointState
-from builtin_interfaces.msg import Duration
 import sys
 
+import rclpy
+from builtin_interfaces.msg import Duration
+from geometry_msgs.msg import PoseStamped
+from moveit_msgs.msg import Constraints, JointConstraint, PositionIKRequest
+from moveit_msgs.srv import GetMotionPlan, GetPositionIK
+from rclpy.node import Node
+from sensor_msgs.msg import JointState
 
 # Example usage:
 # -------------------------------------------------
@@ -42,26 +30,23 @@ import sys
 
 class IKPlanner(Node):
     def __init__(self):
-        super().__init__('ik_planner')
+        super().__init__("ik_planner")
 
         # ---- Clients ----
-        self.ik_client = self.create_client(GetPositionIK, '/compute_ik')
-        self.plan_client = self.create_client(GetMotionPlan, '/plan_kinematic_path')
+        self.ik_client = self.create_client(GetPositionIK, "/compute_ik")
+        self.plan_client = self.create_client(GetMotionPlan, "/plan_kinematic_path")
 
-        for srv, name in [(self.ik_client, 'compute_ik'),
-                          (self.plan_client, 'plan_kinematic_path')]:
+        for srv, name in [
+            (self.ik_client, "compute_ik"),
+            (self.plan_client, "plan_kinematic_path"),
+        ]:
             while not srv.wait_for_service(timeout_sec=1.0):
-                self.get_logger().info(f'Waiting for /{name} service...')
+                self.get_logger().info(f"Waiting for /{name} service...")
 
-    # -----------------------------------------------------------
-    # TODO: Compute IK for a given (x, y, z) + quat and current robot joint state
-    # -----------------------------------------------------------
-    def compute_ik(self, current_joint_state, x, y, z,
-                   qx=0.0, qy=1.0, qz=0.0, qw=0.0): # Think about why the default quaternion is like this. Why is qy=1?
+    def compute_ik(self, current_joint_state, x, y, z, qx=0.0, qy=1.0, qz=0.0, qw=0.0):
         pose = PoseStamped()
-        pose.header.frame_id = 'base_link'
-        
-        # TODO: There are multiple parts/lines to fill here!
+        pose.header.frame_id = "base_link"
+
         pose.pose.position.x = x
         pose.pose.position.y = y
         pose.pose.position.z = z
@@ -71,59 +56,40 @@ class IKPlanner(Node):
         pose.pose.orientation.w = qw
 
         ik_req = GetPositionIK.Request()
-        # TODO: Lookup the format for ik request and build ik_req by filling in necessary parameters. What is your end-effector link name?
         ik_req.ik_request.avoid_collisions = False
         ik_req.ik_request.timeout = Duration(sec=5)
-        ik_req.ik_request.group_name = 'ur_manipulator'
+        ik_req.ik_request.group_name = "ur_manipulator"
         ik_req.ik_request.pose_stamped = pose
         ik_req.ik_request.robot_state.joint_state = current_joint_state
-        ik_req.ik_request.ik_link_name = 'tool0'
+        ik_req.ik_request.ik_link_name = "tool0"
 
         future = self.ik_client.call_async(ik_req)
         rclpy.spin_until_future_complete(self, future)
 
         if future.result() is None:
-            self.get_logger().error('IK service failed.')
+            self.get_logger().error("IK service failed.")
             return None
 
         result = future.result()
         if result.error_code.val != result.error_code.SUCCESS:
-            self.get_logger().error(f'IK failed, code: {result.error_code.val}')
+            self.get_logger().error(f"IK failed, code: {result.error_code.val}")
             return None
 
-        self.get_logger().info('IK solution found.')
+        self.get_logger().info("IK solution found.")
         return result.solution.joint_state
 
-    # -----------------------------------------------------------
-    # Plan motion given a desired joint configuration
-    # -----------------------------------------------------------
-    def plan_to_joints(self, start_joint_state, target_joint_state):
-
-        if start_joint_state is None:
-            self.get_logger().error("start_joint_state is None")
-            return None
-
-        if len(start_joint_state.name) == 0:
-            self.get_logger().error("start_joint_state has empty names")
-            return None
-
-        if len(start_joint_state.position) == 0:
-            self.get_logger().error("start_joint_state has empty positions")
-            return None
-
-        if len(start_joint_state.name) != len(start_joint_state.position):
-            self.get_logger().error("start_joint_state mismatch")
-            return None
-
+    def plan_to_joints(self, target_joint_state):
         if target_joint_state is None:
             self.get_logger().error("target_joint_state is None")
             return None
-            
+
         req = GetMotionPlan.Request()
-        req.motion_plan_request.group_name = 'ur_manipulator'
-        req.motion_plan_request.allowed_planning_time = 5.0
+        req.motion_plan_request.group_name = "ur_manipulator"
+        req.motion_plan_request.allowed_planning_time = 4.0
+
+        req.motion_plan_request.max_velocity_scaling_factor = 0.5
+        req.motion_plan_request.max_acceleration_scaling_factor = 0.5
         req.motion_plan_request.planner_id = "RRTConnectkConfigDefault"
-        req.motion_plan_request.start_state.joint_state = start_joint_state
 
         goal_constraints = Constraints()
         for name, pos in zip(target_joint_state.name, target_joint_state.position):
@@ -133,7 +99,7 @@ class IKPlanner(Node):
                     position=pos,
                     tolerance_above=0.01,
                     tolerance_below=0.01,
-                    weight=1.0
+                    weight=1.0,
                 )
             )
 
@@ -143,17 +109,17 @@ class IKPlanner(Node):
         rclpy.spin_until_future_complete(self, future)
 
         if future.result() is None:
-            self.get_logger().error('Planning service failed.')
+            self.get_logger().error("Planning service failed.")
             return None
 
         result = future.result()
         if result.motion_plan_response.error_code.val != 1:
             self.get_logger().error(
-                f'Planning failed, code: {result.motion_plan_response.error_code.val}'
+                f"Planning failed, code: {result.motion_plan_response.error_code.val}"
             )
             return None
 
-        self.get_logger().info('Motion plan computed successfully.')
+        self.get_logger().info("Motion plan computed successfully.")
         return result.motion_plan_response.trajectory
 
 
@@ -164,8 +130,12 @@ def main(args=None):
     # ---------- Test setup ----------
     current_state = JointState()
     current_state.name = [
-        'shoulder_pan_joint', 'shoulder_lift_joint', 'elbow_joint',
-        'wrist_1_joint', 'wrist_2_joint', 'wrist_3_joint'
+        "shoulder_pan_joint",
+        "shoulder_lift_joint",
+        "elbow_joint",
+        "wrist_1_joint",
+        "wrist_2_joint",
+        "wrist_3_joint",
     ]
 
     current_state.position = [4.722, -1.850, -1.425, -1.405, 1.593, -3.141]
@@ -192,11 +162,12 @@ def main(args=None):
         sys.exit(1)
 
     node.get_logger().info("IK check passed.")
-    
+
     rclpy.spin(node)
     node.destroy_node()
     rclpy.shutdown()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
+
