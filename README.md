@@ -1,9 +1,16 @@
 # connect-foUR7e
+CV Connect 4 using UR7e arm. 
 
-```
-<!-- ros2 launch realsense2_camera rs_launch.py pointcloud.enable:=true
-\rgb_camera.color_profile:=1920x1080x30 -->
-```
+Requires
+- UR7e
+- Logitech C922 Pro Stream Webcam
+
+Features
+- Board Localization (using homography correction)
+- Disc color detection
+- Connect-4 Game Solver
+- IK and motion planning for UR7e
+- Autonomous disc pickup and placement
 
 ## Repository Structure
 
@@ -20,60 +27,65 @@ src/
 └── usb_cam/
 ```
 
-## Startup
-
-Get into distrobox (1st time EVER)
+## Prerequisites
+### Set up distrobox (1st time EVER)
 ```
 inst-containers-setup
 ~ee106a/create-ros2-container
+```
+
+## Startup
+### Enter distrobox
+```
 distrobox enter ros2
 ```
 
-Turn on robot
+## Robot Bringup
+### Enable UR7e communication
 ```
 ros2 run ur7e_utils enable_comms
 ```
 
-Launch usb cam
+### Launch USB camera
 ```
 source install/setup.bash
 ros2 launch usb_cam camera.launch.py
 ```
 
-Pick corners
+## Calibration
+### Select board corners
 ```
 source install/setup.bash
 ros2 run board_calibration board_corners
 ```
 
-Pick disc colors
+### Select disc colors
 ```
 source install/setup.bash
 ros2 run board_calibration disc_colors
 ```
-
-Launch the game logic
+## Launch perception and game logic
 ```
 source install/setup.bash
 ros2 launch connect4_launch perception.launch.py
 ```
 
-Launch moveit and ik service
+## Motion planning
+### Launch Moveit and IK service
 ```
 source install/setup.bash
 ros2 launch planning lab5_bringup.launch.py
 ```
 
-## Testing
+## Utilities
 
-### Tuck
+### Tuck Robot
 ```
 ros2 run ur7e_utils reset_state && ros2 run ur7e_utils tuck
 ```
 
-### To setup connect4 board
+### Debug IK or CV using known board + piece locations
 
 ```
-source install/setup.bash
 ros2 run planning debug
 ```
