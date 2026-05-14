@@ -5,6 +5,21 @@
 \rgb_camera.color_profile:=1920x1080x30 -->
 ```
 
+## Repository Structure
+
+```text
+src/
+├── board_calibration/
+├── connect4_launch/
+├── disc_detector/
+├── game_planner/
+├── game_state/
+├── planning/
+├── piece_localization_interfaces/
+├── ros2_aruco/
+└── usb_cam/
+```
+
 ## Startup
 
 Get into distrobox (1st time EVER)
